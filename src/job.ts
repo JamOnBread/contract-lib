@@ -297,7 +297,7 @@ export class JoB {
     if(market!.datum! in collectFromTreasuries) {
       payToTreasuries[market!.datum!] += provision * 0.5
     } else {
-      payToTreasuries[market!.datum!] += provision * 0.5
+      payToTreasuries[market!.datum!] = provision * 0.5
       collectFromTreasuries[market!.datum!] = market
     }
     
