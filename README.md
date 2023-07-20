@@ -1,2 +1,6 @@
-= JoB contracts
-Library for interacting with JoB smart contract on Cardano blockchain network
+# JoB contracts
+
+Library for interacting with JoB smart contract on the Cardano blockchain network
+all examples are present in file [example.ts](example.ts)
+
+The library must be initialized with the context of running the JoB smart contract params (UTxO with scripts and script hashes)
