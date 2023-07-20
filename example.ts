@@ -25,7 +25,7 @@ const ctx = {
         txHash: "1473d3b40edd2578d7bad8f081e3d4f1ff9cdde0419b14193355e8f4e9afcc74",
         outputIndex: 0
       },
-      instnantbuyPolicy: {
+      instantbuyPolicy: {
         txHash: "594fff82e943159196419830a5106e8015f11272d819b7aaf301888da263557a",
         outputIndex: 0
       },

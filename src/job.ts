@@ -248,7 +248,7 @@ export class JoB {
   async instantBuyProceed(lucid: Lucid, utxo: OutRef, marketTreasury: string) {
     const readUtxos = await lucid.utxosByOutRef([
         this.ctx.utxos.instantbuyScript,
-        this.ctx.utxos.instnantbuyPolicy,
+        this.ctx.utxos.instantbuyPolicy,
         this.ctx.utxos.treasuryScript,
         this.ctx.utxos.protocolParams
     ])

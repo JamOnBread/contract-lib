@@ -5,7 +5,7 @@ export type UTxOs = {
     treasuryScript: OutRef,
     treasuryPolicy: OutRef,
     instantbuyScript: OutRef,
-    instnantbuyPolicy: OutRef,
+    instantbuyPolicy: OutRef,
     // Offer
 }
 
