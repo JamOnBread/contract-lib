@@ -71,16 +71,14 @@ export const job = new JoB(ctx)
 
 //console.log(await job.treasuryWithdraw(lucid, "d8799fd8799fd8799f581cbd72b8c93f8d9b995c3381936fbc5166ba44bae685c5664fb22c401cffd87a80ffff", "Address"))
 
-/*
+
 console.log(await job.instantbuyCreate(
   lucid, 
-  "75b6380638b658707c176d2a572168fb93d4928467aca10a97c846ee" + "4a6f4250726f746f636f6c566572696669636174696f6e",
+  "b2dc76c2c809ce1dc3189b138ca1d893e1f9a02224ee4b8b7343d6f3" + "74657374746f6b656e31",
   10_000_000n,
   Data.to(job.treasuryDatum)
   )
 )
-*/
-
 
 
 /*
@@ -90,8 +88,9 @@ console.log(await job.instantBuyCancel(lucid, {
 }))
 */
 
-
+/*
 console.log(await job.instantBuyProceed(lucid, {
-  txHash: "30488fb821248e73dc5e4ac51b7a81dc0a31a85f5fd6c6204ec9581285604ef4",
+  txHash: "ccf57dcf357d4b9e00aa9423fa03b2fdb1913ffa40b413ec452d24bdb3e425d1",
   outputIndex: 0
 }, Data.to(job.treasuryDatum)))
+*/
