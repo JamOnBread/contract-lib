@@ -18,11 +18,16 @@
     "ts-node": "^10.9.1"
   },
   "devDependencies": {
+    "@types/node": "^20.4.4",
+    "npm-run-all": "^4.1.5",
     "typescript": "^5.1.6"
   },
   "scripts": {
+    "compile": "tsc -b ./tsconfig.cjs.json ./tsconfig.esm.json",
+    "build:clean": "rm -rf ./dist",
     "build": "tsc",
     "watch": "tsc --watch",
-    "test": "ts-node example.ts --noemit"
+    "test": "ts-node example.ts --noemit",
+    "ba": "npm-run-all build:clean compile && node ./scripts/prepare-package-json"
   }
 }
