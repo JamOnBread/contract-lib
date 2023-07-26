@@ -2,12 +2,14 @@
   "name": "job",
   "version": "1.0.0",
   "type": "module",
-  "description": "Can log \"hello world\" and \"goodbye world\" to the console!",
+  "description": "JoB smart contract manipulation",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "/dist/*"
+    "dist/index.d.ts",
+    "dist/index.js",
+    "dist/index.js.map"
   ],
   "dependencies": {
     "lucid-cardano": "^0.10.6"
@@ -23,11 +25,6 @@
     "chai": "^4.3.7"
   },
   "scripts": {
-    "compile": "tsc -b ./tsconfig.cjs.json ./tsconfig.esm.json",
-    "build:clean": "rm -rf ./dist",
-    "build": "tsc",
-    "watch": "tsc --watch",
-    "test": "ts-node example.ts --noemit",
-    "ba": "npm-run-all build:clean compile && node ./scripts/prepare-package-json"
+    "build": "tsc"
   }
 }
