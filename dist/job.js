@@ -1,16 +1,12 @@
-"use strict";
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.JoB = void 0;
-const lucid_cardano_1 = require("lucid-cardano");
-const utils_1 = require("./utils");
-const constant_1 = require("./constant");
-class JoB {
-    ctx;
+import { Constr, Data, fromText } from "lucid-cardano";
+import { encodeTreasuryDatumAddress, encodeTreasuryDatumTokens, encodeAddress } from "./utils";
+import { UTXO_MIN_ADA, TREASURY_MINT_NAME, INSTANTBUY_MINT_NAME } from "./constant";
+export class JoB {
     constructor(ctx) {
         this.ctx = ctx;
     }
     get treasuryDatum() {
-        return (0, utils_1.encodeTreasuryDatumTokens)(this.ctx.jobToken, BigInt(this.ctx.jobTokenCount / 2 + 1));
+        return encodeTreasuryDatumTokens(this.ctx.jobToken, BigInt(this.ctx.jobTokenCount / 2 + 1));
     }
     getTreasuryAddress(lucid, stake) {
         const paymentCredential = {
@@ -52,10 +48,10 @@ class JoB {
         return undefined;
     }
     parseInstantbuyDatum(lucid, datumString) {
-        const datum = lucid_cardano_1.Data.from(datumString);
+        const datum = Data.from(datumString);
         console.log(datum);
         const amount = datum.fields[3];
-        const listing = lucid_cardano_1.Data.to(datum.fields[1]);
+        const listing = Data.to(datum.fields[1]);
         const beneficier_address = datum.fields[0].fields[0].fields[0];
         const beneficier_stake = datum.fields[0].fields[1].fields[0];
         const beneficier = lucid.utils.credentialToAddress(lucid.utils.keyHashToCredential(beneficier_address), beneficier_stake);
@@ -84,7 +80,7 @@ class JoB {
         const tx = await lucid
             .newTx()
             .payToContract(treasuryAddress, { inline: datum }, {
-            lovelace: BigInt(2 * constant_1.UTXO_MIN_ADA)
+            lovelace: BigInt(2 * UTXO_MIN_ADA)
         })
             .complete();
         const signedTx = await tx.sign().complete();
@@ -96,17 +92,17 @@ class JoB {
     }
     async treasuryCreateToken(lucid, stake = 0) {
         const datum = this.treasuryDatum;
-        return await this.treasuryCreate(lucid, lucid_cardano_1.Data.to(datum), stake);
+        return await this.treasuryCreate(lucid, Data.to(datum), stake);
     }
     async treasuryCreateAddress(lucid, stake = 0, address) {
         const addr = lucid.utils.paymentCredentialOf(address ? address : await lucid.wallet.address());
-        const datum = (0, utils_1.encodeTreasuryDatumAddress)(addr.hash);
-        return await this.treasuryCreate(lucid, lucid_cardano_1.Data.to(datum), stake);
+        const datum = encodeTreasuryDatumAddress(addr.hash);
+        return await this.treasuryCreate(lucid, Data.to(datum), stake);
     }
     async treasuryWithdraw(lucid, datum, type) {
         const address = await lucid.wallet.address();
-        const utxos = (await this.getTreasuries(lucid)).filter(value => value.datum == datum && value.assets.lovelace > constant_1.UTXO_MIN_ADA);
-        const withdrawFeesRedeemer = lucid_cardano_1.Data.to(new lucid_cardano_1.Constr(1, []));
+        const utxos = (await this.getTreasuries(lucid)).filter(value => value.datum == datum && value.assets.lovelace > UTXO_MIN_ADA);
+        const withdrawFeesRedeemer = Data.to(new Constr(1, []));
         const readUtxos = await lucid.utxosByOutRef([
             this.ctx.utxos.treasuryScript,
             this.ctx.utxos.treasuryPolicy,
@@ -116,15 +112,15 @@ class JoB {
         let buildTx = lucid
             .newTx()
             .mintAssets({
-            [this.ctx.hashes.treasuryPolicy + (0, lucid_cardano_1.fromText)(constant_1.TREASURY_MINT_NAME)]: BigInt(1)
-        }, lucid_cardano_1.Data.to(new lucid_cardano_1.Constr(0, [])))
+            [this.ctx.hashes.treasuryPolicy + fromText(TREASURY_MINT_NAME)]: BigInt(1)
+        }, Data.to(new Constr(0, [])))
             .readFrom(readUtxos)
             .collectFrom(utxos, withdrawFeesRedeemer);
         let amount = BigInt(0);
         for (let utxo of utxos) {
             buildTx = buildTx
-                .payToContract(utxo.address, { inline: utxo.datum }, { lovelace: BigInt(constant_1.UTXO_MIN_ADA) });
-            amount += utxo.assets.lovelace - BigInt(constant_1.UTXO_MIN_ADA);
+                .payToContract(utxo.address, { inline: utxo.datum }, { lovelace: BigInt(UTXO_MIN_ADA) });
+            amount += utxo.assets.lovelace - BigInt(UTXO_MIN_ADA);
         }
         buildTx = buildTx.payToAddress(address, { lovelace: amount });
         const tx = (type == "Address" ? await buildTx.addSigner(address).complete() : await buildTx.payToAddress(address, {
@@ -140,17 +136,17 @@ class JoB {
     }
     async instantbuyCreate(lucid, unit, price, listing, affiliate, royalty, percent) {
         const payCred = lucid.utils.paymentCredentialOf(await lucid.wallet.address());
-        const sellerAddr = (0, utils_1.encodeAddress)(payCred.hash);
-        const datum = new lucid_cardano_1.Constr(0, [
+        const sellerAddr = encodeAddress(payCred.hash);
+        const datum = new Constr(0, [
             sellerAddr,
-            lucid_cardano_1.Data.from(listing),
-            affiliate ? new lucid_cardano_1.Constr(0, [lucid_cardano_1.Data.from(affiliate)]) : new lucid_cardano_1.Constr(1, []),
+            Data.from(listing),
+            affiliate ? new Constr(0, [Data.from(affiliate)]) : new Constr(1, []),
             price,
-            royalty && percent ? new lucid_cardano_1.Constr(0, [new lucid_cardano_1.Constr(0, [BigInt(percent * 10000), lucid_cardano_1.Data.from(royalty)])]) : new lucid_cardano_1.Constr(1, [])
+            royalty && percent ? new Constr(0, [new Constr(0, [BigInt(percent * 10000), Data.from(royalty)])]) : new Constr(1, [])
         ]);
         const tx = await lucid
             .newTx()
-            .payToContract(this.getInstantbuyAddress(lucid, 0), { inline: lucid_cardano_1.Data.to(datum) }, { [unit]: BigInt(1), lovelace: 2000000n })
+            .payToContract(this.getInstantbuyAddress(lucid, 0), { inline: Data.to(datum) }, { [unit]: BigInt(1), lovelace: 2000000n })
             .complete();
         const signedTx = await tx.sign().complete();
         const txHash = await signedTx.submit();
@@ -160,7 +156,7 @@ class JoB {
         };
     }
     async instantBuyCancel(lucid, utxo) {
-        const cancelRedeemer = lucid_cardano_1.Data.to(new lucid_cardano_1.Constr(1, []));
+        const cancelRedeemer = Data.to(new Constr(1, []));
         const toSpend = await lucid.utxosByOutRef([utxo]);
         const readUtxos = await lucid.utxosByOutRef([
             this.ctx.utxos.instantbuyScript
@@ -192,16 +188,16 @@ class JoB {
         ]);
         const treasuries = await this.getTreasuries(lucid);
         const params = this.parseInstantbuyDatum(lucid, collectUtxo.datum);
-        const job = this.getTreasury(treasuries, lucid_cardano_1.Data.to(this.treasuryDatum));
+        const job = this.getTreasury(treasuries, Data.to(this.treasuryDatum));
         const listing = this.getTreasury(treasuries, params.listing);
         const market = this.getTreasury(treasuries, marketTreasury);
         const provision = 0.025 * Number(params.amount);
-        const payFeesRedeemer = lucid_cardano_1.Data.to(new lucid_cardano_1.Constr(0, []));
-        const buyRedeemer = lucid_cardano_1.Data.to(new lucid_cardano_1.Constr(0, [
+        const payFeesRedeemer = Data.to(new Constr(0, []));
+        const buyRedeemer = Data.to(new Constr(0, [
             Array.from([
-                new lucid_cardano_1.Constr(0, [
+                new Constr(0, [
                     BigInt(10000),
-                    lucid_cardano_1.Data.from(marketTreasury)
+                    Data.from(marketTreasury)
                 ]), // selling marketplace
             ])
         ]));
@@ -230,7 +226,7 @@ class JoB {
         }
         let buildTx = lucid
             .newTx()
-            .mintAssets({ [this.ctx.hashes.instantbuyPolicy + (0, lucid_cardano_1.fromText)(constant_1.INSTANTBUY_MINT_NAME)]: BigInt(1) }, lucid_cardano_1.Data.to(new lucid_cardano_1.Constr(0, [])))
+            .mintAssets({ [this.ctx.hashes.instantbuyPolicy + fromText(INSTANTBUY_MINT_NAME)]: BigInt(1) }, Data.to(new Constr(0, [])))
             .readFrom(readUtxos)
             .collectFrom(Object.values(collectFromTreasuries), payFeesRedeemer)
             .collectFrom([
@@ -250,5 +246,4 @@ class JoB {
         };
     }
 }
-exports.JoB = JoB;
 //# sourceMappingURL=job.js.map
