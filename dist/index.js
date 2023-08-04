@@ -157,8 +157,10 @@ export class JoB {
         };
     }
     async instantbuyList(lucid, unit, price, listing, affiliate, royalty, percent) {
-        const payCred = lucid.utils.paymentCredentialOf(await lucid.wallet.address());
-        const sellerAddr = encodeAddress(payCred.hash);
+        const address = await lucid.wallet.address();
+        const payCred = lucid.utils.paymentCredentialOf(address);
+        const stakeCred = lucid.utils.stakeCredentialOf(address);
+        const sellerAddr = encodeAddress(payCred.hash, stakeCred?.hash);
         const datum = new Constr(0, [
             sellerAddr,
             Data.from(listing),
