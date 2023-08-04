@@ -62,7 +62,19 @@ export declare class JoB {
         txHash: string;
         outputIndex: number;
     }>;
+    instantBuyCancelUnit(lucid: Lucid, unit: Unit): Promise<{
+        txHash: string;
+        outputIndex: number;
+    }>;
+    instantBuyUpdate(lucid: Lucid, unit: Unit, price: bigint, listing: string, affiliate?: string, royalty?: string, percent?: number): Promise<{
+        txHash: string;
+        outputIndex: number;
+    }>;
     instantBuyProceed(lucid: Lucid, utxo: OutRef, marketTreasury: string): Promise<{
+        txHash: string;
+        outputIndex: number;
+    }>;
+    instantBuyProceedUnit(lucid: Lucid, unit: Unit, marketTreasury: string): Promise<{
         txHash: string;
         outputIndex: number;
     }>;

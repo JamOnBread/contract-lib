@@ -198,6 +198,39 @@ export class JoB {
             outputIndex: 0
         };
     }
+    async instantBuyCancelUnit(lucid, unit) {
+        const utxo = await lucid.utxoByUnit(unit);
+        return await this.instantBuyCancel(lucid, utxo);
+    }
+    async instantBuyUpdate(lucid, unit, price, listing, affiliate, royalty, percent) {
+        const toSpend = await lucid.utxoByUnit(unit);
+        const cancelRedeemer = Data.to(new Constr(1, []));
+        const readUtxos = await lucid.utxosByOutRef([
+            this.ctx.utxos.instantbuyScript
+        ]);
+        const payCred = lucid.utils.paymentCredentialOf(await lucid.wallet.address());
+        const sellerAddr = encodeAddress(payCred.hash);
+        const datum = new Constr(0, [
+            sellerAddr,
+            Data.from(listing),
+            affiliate ? new Constr(0, [Data.from(affiliate)]) : new Constr(1, []),
+            price,
+            royalty && percent ? new Constr(0, [new Constr(0, [BigInt(percent * 10000), Data.from(royalty)])]) : new Constr(1, [])
+        ]);
+        const txUpdate = await lucid
+            .newTx()
+            .collectFrom([toSpend], cancelRedeemer)
+            .readFrom(readUtxos)
+            .payToContract(this.getInstantbuyAddress(lucid, 0), { inline: Data.to(datum) }, { [unit]: BigInt(1), lovelace: UTXO_MIN_ADA })
+            .addSigner(await lucid.wallet.address())
+            .complete();
+        const signedTx = await txUpdate.sign().complete();
+        const txHash = await signedTx.submit();
+        return {
+            txHash,
+            outputIndex: 0
+        };
+    }
     async instantBuyProceed(lucid, utxo, marketTreasury) {
         const readUtxos = await lucid.utxosByOutRef([
             this.ctx.utxos.instantbuyScript,
@@ -266,6 +299,10 @@ export class JoB {
             txHash,
             outputIndex: 0
         };
+    }
+    async instantBuyProceedUnit(lucid, unit, marketTreasury) {
+        const utxo = await lucid.utxoByUnit(unit);
+        return await this.instantBuyProceed(lucid, utxo, marketTreasury);
     }
 }
 //# sourceMappingURL=index.js.map

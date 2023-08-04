@@ -228,13 +228,13 @@ export class JoB {
         let amount = BigInt(0)    
 
         for (let utxo of utxos) {
-        buildTx = buildTx
-            .payToContract(
-                utxo.address, 
-                { inline: utxo.datum! }, 
-                { lovelace: BigInt(UTXO_MIN_ADA) }
-            )
-        amount += utxo.assets.lovelace - BigInt(UTXO_MIN_ADA);
+            buildTx = buildTx
+                .payToContract(
+                    utxo.address, 
+                    { inline: utxo.datum! }, 
+                    { lovelace: BigInt(UTXO_MIN_ADA) }
+                )
+            amount += utxo.assets.lovelace - BigInt(UTXO_MIN_ADA);
         }
         buildTx = buildTx.payToAddress(address, { lovelace: amount })
 
@@ -303,6 +303,48 @@ export class JoB {
             .complete()
 
         const txHash = await signedTx.submit()
+
+        return {
+            txHash,
+            outputIndex: 0
+        }
+    }
+
+    async instantBuyCancelUnit(lucid: Lucid, unit: Unit) {
+        const utxo = await lucid.utxoByUnit(unit)
+        return await this.instantBuyCancel(lucid, utxo)
+    }
+
+    async instantBuyUpdate(lucid: Lucid, unit: Unit, price: bigint, listing: string, affiliate?: string, royalty?: string, percent?: number) {
+        const toSpend = await lucid.utxoByUnit(unit)
+        const cancelRedeemer = Data.to(new Constr(1, []));
+        const readUtxos = await lucid.utxosByOutRef([
+            this.ctx.utxos.instantbuyScript
+        ])
+        const payCred = lucid.utils.paymentCredentialOf(await lucid.wallet.address())
+        const sellerAddr = encodeAddress(payCred.hash)
+        const datum = new Constr(0, [
+            sellerAddr,
+            Data.from(listing),
+            affiliate ? new Constr(0, [Data.from(affiliate)]) : new Constr(1, []),
+            price,
+            royalty && percent ? new Constr(0, [new Constr(0, [BigInt(percent * 10_000), Data.from(royalty)])]) : new Constr(1, [])
+        ]);
+        
+        const txUpdate = await lucid
+            .newTx()
+            .collectFrom([toSpend], cancelRedeemer)
+            .readFrom(readUtxos)
+            .payToContract(
+                this.getInstantbuyAddress(lucid, 0),
+                { inline: Data.to(datum) },
+                { [unit]: BigInt(1), lovelace: UTXO_MIN_ADA }
+            )
+            .addSigner(await lucid.wallet.address())
+            .complete();
+
+        const signedTx = await txUpdate.sign().complete();
+        const txHash = await signedTx.submit();
 
         return {
             txHash,
@@ -408,5 +450,10 @@ export class JoB {
             txHash,
             outputIndex: 0
         }
+    }
+
+    async instantBuyProceedUnit(lucid: Lucid, unit: Unit, marketTreasury: string) {
+        const utxo = await lucid.utxoByUnit(unit)
+        return await this.instantBuyProceed(lucid, utxo, marketTreasury)
     }
 }
