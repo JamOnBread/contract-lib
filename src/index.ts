@@ -1,4 +1,5 @@
 import { Lucid, OutRef, PolicyId, Unit, C, Constr, Credential, UTxO, Data, fromText} from "lucid-cardano"
+import { addListener } from "process"
 
 export const TREASURY_MINT_NAME = "WITHDRAW_TREASURY"
 export const INSTANTBUY_MINT_NAME = "INSTANT_BUY"
@@ -257,8 +258,11 @@ export class JoB {
     }
 
     async instantbuyList(lucid: Lucid, unit: Unit, price: bigint, listing: string, affiliate?: string, royalty?: string, percent?: number) {
-        const payCred = lucid.utils.paymentCredentialOf(await lucid.wallet.address())
-        const sellerAddr = encodeAddress(payCred.hash)
+        const address = await lucid.wallet.address()
+        const payCred = lucid.utils.paymentCredentialOf(address)
+        const stakeCred = lucid.utils.stakeCredentialOf(address)
+
+        const sellerAddr = encodeAddress(payCred.hash, stakeCred?.hash)
         const datum = new Constr(0, [
             sellerAddr,
             Data.from(listing),
