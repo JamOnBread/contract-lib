@@ -12,7 +12,7 @@
     "dist/index.js.map"
   ],
   "dependencies": {
-    "lucid-cardano": "^0.10.6"
+    "lucid-cardano": "^0.10.7"
   },
   "devDependencies": {
     "@types/node": "^20.4.4",
