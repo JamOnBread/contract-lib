@@ -45,14 +45,14 @@ export function encodeAddress(
     stakingPubKeyHex?: string
   ) : Constr<any> {
     const paymentCredential = new Constr(0, [paymentPubKeyHex]);
-  
+
     const stakingCredential = stakingPubKeyHex
       ? new Constr(0, [new Constr(0, [new Constr(0, [stakingPubKeyHex])])])
       : new Constr(1, []);
-  
+
     return new Constr(0, [paymentCredential, stakingCredential]);
   }
-  
+
 export function encodeTreasuryDatumAddress(
     paymentPubKeyHex: string,
     stakingPubKeyHex?: string
@@ -67,14 +67,14 @@ export function encodeTreasuryDatumTokens(
   ) : Constr<any> {
     return new Constr(1, [new Constr(0, [currencySymbol, minTokens])]);
   };
-  
+
 export function encodeRoyalty(royaltyWM?: C.PlutusData, percent?: number) : Constr<any> {
     return royaltyWM && percent
       ? new Constr(0, [new Constr(0, [BigInt(percent * 10_000), royaltyWM])])
       : new Constr(1, []);
   };
 
-  
+
 export class JoB {
     ctx: Context
 
@@ -116,11 +116,11 @@ export class JoB {
 
     /**
      * Get free treasuries
-     * @param lucid 
+     * @param lucid
      * @returns UTxOs
      */
     async getTreasuries(lucid: Lucid) : Promise<UTxO[]> {
-        return await lucid.utxosAt(this.getTreasuryAddress(lucid, 0))    
+        return await lucid.utxosAt(this.getTreasuryAddress(lucid, 0))
     }
 
     getTreasury(treasuries: UTxO[], datum: string) : UTxO | undefined {
@@ -165,7 +165,7 @@ export class JoB {
         hash: this.ctx.stakes[0]
         } as Credential
 
-        return await lucid.utxosAt(lucid.utils.credentialToAddress(paymentCredential, stakeCredential))    
+        return await lucid.utxosAt(lucid.utils.credentialToAddress(paymentCredential, stakeCredential))
     }
 
     async treasuryCreate(lucid: Lucid, datum: string, stake: number) : Promise<OutRef> {
@@ -192,7 +192,7 @@ export class JoB {
 
     async treasuryCreateToken(lucid: Lucid, stake: number = 0) : Promise<OutRef> {
         const datum = this.treasuryDatum
-        return await this.treasuryCreate(lucid, Data.to(datum), stake)    
+        return await this.treasuryCreate(lucid, Data.to(datum), stake)
     }
 
     async treasuryCreateAddress(lucid: Lucid, stake: number = 0, address?: string) : Promise<OutRef>{
@@ -226,13 +226,13 @@ export class JoB {
             utxos,
             withdrawFeesRedeemer
         )
-        let amount = BigInt(0)    
+        let amount = BigInt(0)
 
         for (let utxo of utxos) {
             buildTx = buildTx
                 .payToContract(
-                    utxo.address, 
-                    { inline: utxo.datum! }, 
+                    utxo.address,
+                    { inline: utxo.datum! },
                     { lovelace: BigInt(UTXO_MIN_ADA) }
                 )
             amount += utxo.assets.lovelace - BigInt(UTXO_MIN_ADA);
@@ -258,11 +258,7 @@ export class JoB {
     }
 
     async instantbuyList(lucid: Lucid, unit: Unit, price: bigint, listing: string, affiliate?: string, royalty?: string, percent?: number) {
-        const address = await lucid.wallet.address()
-        const payCred = lucid.utils.paymentCredentialOf(address)
-        const stakeCred = lucid.utils.stakeCredentialOf(address)
-
-        const sellerAddr = encodeAddress(payCred.hash, stakeCred?.hash)
+        const sellerAddr = await this.getInstantBuySellerAddress(lucid)
         const datum = new Constr(0, [
             sellerAddr,
             Data.from(listing),
@@ -325,8 +321,8 @@ export class JoB {
         const readUtxos = await lucid.utxosByOutRef([
             this.ctx.utxos.instantbuyScript
         ])
-        const payCred = lucid.utils.paymentCredentialOf(await lucid.wallet.address())
-        const sellerAddr = encodeAddress(payCred.hash)
+
+        const sellerAddr = await this.getInstantBuySellerAddress(lucid)
         const datum = new Constr(0, [
             sellerAddr,
             Data.from(listing),
@@ -334,7 +330,7 @@ export class JoB {
             price,
             royalty && percent ? new Constr(0, [new Constr(0, [BigInt(percent * 10_000), Data.from(royalty)])]) : new Constr(1, [])
         ]);
-        
+
         const txUpdate = await lucid
             .newTx()
             .collectFrom([toSpend], cancelRedeemer)
@@ -411,7 +407,7 @@ export class JoB {
         payToTreasuries[market!.datum!] = provision * 0.5
         collectFromTreasuries[market!.datum!] = market
         }
-        
+
 
         let buildTx = lucid
             .newTx()
@@ -443,7 +439,7 @@ export class JoB {
         buildTx = buildTx.payToAddress(
             params.beneficier,
             { lovelace: params.amount + collectUtxo.assets.lovelace }
-        )        
+        )
         .addSigner(await lucid.wallet.address())
 
         const tx = await buildTx.complete()
@@ -459,5 +455,15 @@ export class JoB {
     async instantBuyProceedUnit(lucid: Lucid, unit: Unit, marketTreasury: string) {
         const utxo = await lucid.utxoByUnit(unit)
         return await this.instantBuyProceed(lucid, utxo, marketTreasury)
+    }
+
+    private async getInstantBuySellerAddress(lucid: Lucid): Promise<ReturnType<typeof encodeAddress>> {
+        const address = await lucid.wallet.address()
+        const payCred = lucid.utils.paymentCredentialOf(address)
+        const stakeCred = lucid.utils.stakeCredentialOf(address)
+
+        const sellerAddress = encodeAddress(payCred.hash, stakeCred?.hash)
+
+        return sellerAddress
     }
 }

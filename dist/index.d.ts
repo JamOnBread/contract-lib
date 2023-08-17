@@ -78,4 +78,5 @@ export declare class JoB {
         txHash: string;
         outputIndex: number;
     }>;
+    private getInstantBuySellerAddress;
 }

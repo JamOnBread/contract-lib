@@ -157,10 +157,7 @@ export class JoB {
         };
     }
     async instantbuyList(lucid, unit, price, listing, affiliate, royalty, percent) {
-        const address = await lucid.wallet.address();
-        const payCred = lucid.utils.paymentCredentialOf(address);
-        const stakeCred = lucid.utils.stakeCredentialOf(address);
-        const sellerAddr = encodeAddress(payCred.hash, stakeCred?.hash);
+        const sellerAddr = await this.getInstantBuySellerAddress(lucid);
         const datum = new Constr(0, [
             sellerAddr,
             Data.from(listing),
@@ -210,8 +207,7 @@ export class JoB {
         const readUtxos = await lucid.utxosByOutRef([
             this.ctx.utxos.instantbuyScript
         ]);
-        const payCred = lucid.utils.paymentCredentialOf(await lucid.wallet.address());
-        const sellerAddr = encodeAddress(payCred.hash);
+        const sellerAddr = await this.getInstantBuySellerAddress(lucid);
         const datum = new Constr(0, [
             sellerAddr,
             Data.from(listing),
@@ -305,6 +301,13 @@ export class JoB {
     async instantBuyProceedUnit(lucid, unit, marketTreasury) {
         const utxo = await lucid.utxoByUnit(unit);
         return await this.instantBuyProceed(lucid, utxo, marketTreasury);
+    }
+    async getInstantBuySellerAddress(lucid) {
+        const address = await lucid.wallet.address();
+        const payCred = lucid.utils.paymentCredentialOf(address);
+        const stakeCred = lucid.utils.stakeCredentialOf(address);
+        const sellerAddress = encodeAddress(payCred.hash, stakeCred?.hash);
+        return sellerAddress;
     }
 }
 //# sourceMappingURL=index.js.map
