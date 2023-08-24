@@ -69,56 +69,6 @@ const ctx = {
 
 export const job = new JoB(ctx)
 
-//console.log(job.instantbuyScriptAddress)
-
-//const treasuries = await job.getTreasuries(lucid)
-
-//console.log(await job.getInstantbuys(lucid))
-
-//console.log(await job.treasuryCreateAddress(lucid))
-
-//console.log(await job.treasuryWithdraw(lucid, "d8799fd8799fd8799f581cbd72b8c93f8d9b995c3381936fbc5166ba44bae685c5664fb22c401cffd87a80ffff", "Address"))
-
-/*
-console.log(await job.instantbuyList(
-  lucid, 
-  "b2dc76c2c809ce1dc3189b138ca1d893e1f9a02224ee4b8b7343d6f3" + "74657374746f6b656e31",
-  10_000_000n,
-  Data.to(job.treasuryDatum)
-  )
-)*/
-
-
-/*
-console.log(await job.instantBuyCancel(lucid, {
-  txHash: "",
-  outputIndex: 0
-}))
-*/
-
-/*
-console.log(await job.instantBuyProceed(lucid, {
-  txHash: "ccf57dcf357d4b9e00aa9423fa03b2fdb1913ffa40b413ec452d24bdb3e425d1",
-  outputIndex: 0
-}, Data.to(job.treasuryDatum)))
-*/
-
-
-/*
-console.log(await job.offerList(
-  lucid,
-  "116b1b3deb5565debfefcf3fc5539832ef9523303cdc1ce6a97a5b59",
-  "4d794e4654",
-  BigInt(5_000_000),
-  Data.to(job.treasuryDatum),
-))*/
-
-
-
-//console.log(await job.offerCancel(lucid, [{txHash: "d9eed8ead3cef8579285a650905da4439bebb750cde85308c6e2ad2ccc9a59d6", outputIndex: 0}]));
-
-
-
 console.log(await job.offerProceed(
   lucid, 
   {
