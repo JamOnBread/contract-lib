@@ -1,6 +1,7 @@
 import { Lucid, OutRef, PolicyId, Unit, C, Constr, UTxO } from "lucid-cardano";
 export declare const TREASURY_MINT_NAME = "WITHDRAW_TREASURY";
 export declare const INSTANTBUY_MINT_NAME = "INSTANT_BUY";
+export declare const OFFER_MINT_NAME = "ACCEPT_OFFER";
 export declare const UTXO_MIN_ADA = 2000000n;
 export type UTxOs = {
     protocolParams: OutRef;
@@ -8,12 +9,16 @@ export type UTxOs = {
     treasuryPolicy: OutRef;
     instantbuyScript: OutRef;
     instantbuyPolicy: OutRef;
+    offerScript: OutRef;
+    offerPolicy: OutRef;
 };
 export type Hashes = {
     treasuryScript: String;
     treasuryPolicy: String;
     instantbuyScript: String;
     instantbuyPolicy: String;
+    offerScript: String;
+    offerPolicy: String;
 };
 export type Context = {
     utxos: UTxOs;
@@ -31,24 +36,38 @@ export type InstantBuyDatum = {
     royalty: string | undefined;
     percent: bigint | undefined;
 };
+export type OfferDatum = {
+    offerrer: string;
+    policyId: PolicyId;
+    name: string;
+    amount: bigint;
+    listing: string;
+    affiliate: string | undefined;
+    royalty: string | undefined;
+    percent: bigint | undefined;
+};
 export declare function encodeAddress(paymentPubKeyHex: string, stakingPubKeyHex?: string): Constr<any>;
 export declare function encodeTreasuryDatumAddress(paymentPubKeyHex: string, stakingPubKeyHex?: string): Constr<any>;
 export declare function encodeTreasuryDatumTokens(currencySymbol: string, minTokens: BigInt): Constr<any>;
 export declare function encodeRoyalty(royaltyWM?: C.PlutusData, percent?: number): Constr<any>;
+export declare const encodeWantedAsset: (policyIdHex: string, tokenNameHex?: string) => Constr<string> | Constr<Constr<string>>;
 export declare class JoB {
     ctx: Context;
     constructor(ctx: Context);
     get treasuryDatum(): Constr<any>;
     getTreasuryAddress(lucid: Lucid, stake: number): string;
-    getInstantbuyAddress(lucid: Lucid, stake: number): string;
+    getInstantbuyAddress(lucid: Lucid, stake?: number): string;
+    getOfferAddress(lucid: Lucid, stake?: number): string;
     /**
      * Get free treasuries
      * @param lucid
      * @returns UTxOs
      */
     getTreasuries(lucid: Lucid): Promise<UTxO[]>;
+    getEncodedAddress(lucid: Lucid): Promise<Constr<any>>;
     getTreasury(treasuries: UTxO[], datum: string): UTxO | undefined;
     parseInstantbuyDatum(lucid: Lucid, datumString: string): InstantBuyDatum;
+    parseOfferDatum(lucid: Lucid, datumString: string): OfferDatum;
     getInstantbuys(lucid: Lucid): Promise<UTxO[]>;
     treasuryCreate(lucid: Lucid, datum: string, stake: number): Promise<OutRef>;
     treasuryCreateToken(lucid: Lucid, stake?: number): Promise<OutRef>;
@@ -75,6 +94,12 @@ export declare class JoB {
         outputIndex: number;
     }>;
     instantBuyProceedUnit(lucid: Lucid, unit: Unit, marketTreasury: string): Promise<{
+        txHash: string;
+        outputIndex: number;
+    }>;
+    offerList(lucid: Lucid, policyId: PolicyId, name: string | undefined, price: bigint, listing: string, affiliate?: string, royalty?: string, percent?: number): Promise<OutRef>;
+    offerCancel(lucid: Lucid, outRefs: OutRef[]): Promise<OutRef>;
+    offerProceed(lucid: Lucid, utxo: OutRef, policyId: PolicyId, name: string, marketTreasury: string): Promise<{
         txHash: string;
         outputIndex: number;
     }>;
