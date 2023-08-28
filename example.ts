@@ -72,10 +72,10 @@ export const job = new JoB(ctx)
 console.log(await job.offerProceed(
   lucid, 
   {
-    txHash: "4bee5711ec5a0da1f42f18e72f5bfde35a4c6083f6d2ac40eae0a60258c4aeca", 
+    txHash: "b8dc4f74d05b8a67e8a96f3887224db93dda40f5744bcf0d5f7469783757907a", 
     outputIndex: 0
   }, 
-  "116b1b3deb5565debfefcf3fc5539832ef9523303cdc1ce6a97a5b59", 
-  "4d794e4654",
+  "75dcafb17dc8c6e77636f022b932618b5ed2a6cda9a1fe4ddd414737", 
+  "4372757374795468654d6f6f6e",
   Data.to(job.treasuryDatum)
 ))
