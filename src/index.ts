@@ -188,7 +188,11 @@ export class JoB {
         const listing = Data.to(datum.fields[1])
         const beneficier_address = datum.fields[0].fields[0].fields[0]
         const beneficier_stake = datum.fields[0].fields[1].fields[0].fields[0].fields[0]
-        const beneficier = lucid.utils.credentialToAddress(lucid.utils.keyHashToCredential(beneficier_address), beneficier_stake)
+
+        const beneficier = lucid.utils.credentialToAddress(
+            lucid.utils.keyHashToCredential(beneficier_address), 
+            beneficier_stake?lucid.utils.keyHashToCredential(beneficier_stake):undefined
+        )
 
         return {
             amount,
@@ -207,7 +211,10 @@ export class JoB {
 
         const offerrer_address = datum.fields[0].fields[0].fields[0]
         const offerrer_stake = datum.fields[0]?.fields[1]?.fields[0]?.fields[0]?.fields[0]
-        const offerrer = lucid.utils.credentialToAddress(lucid.utils.keyHashToCredential(offerrer_address), offerrer_stake)
+        const offerrer = lucid.utils.credentialToAddress(
+            lucid.utils.keyHashToCredential(offerrer_address), 
+            offerrer_stake?lucid.utils.keyHashToCredential(offerrer_stake):undefined
+        )
 
         const listing = Data.to(datum.fields[1])
         const amount = datum.fields[3]
