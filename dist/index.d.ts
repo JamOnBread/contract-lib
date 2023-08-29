@@ -103,4 +103,8 @@ export declare class JoB {
         txHash: string;
         outputIndex: number;
     }>;
+    offerProceedInstant(lucid: Lucid, utxoInstant: OutRef, utxoOffer: OutRef, policyId: PolicyId, name: string, marketTreasury: string): Promise<{
+        txHash: string;
+        outputIndex: number;
+    }>;
 }
