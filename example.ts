@@ -11,6 +11,8 @@ const lucid = await Lucid.new(
   "Preprod",
 );
 lucid.selectWalletFromPrivateKey(privKey)
+console.log(await lucid.wallet.address())
+
 const ctx = {
     hashes: {
       instantbuyPolicy: "f6043416180a15721ff8f8daf830695cc7d98868725a6c5ca9743bc2",
@@ -69,6 +71,34 @@ const ctx = {
 
 export const job = new JoB(ctx)
 
+/*
+console.log(
+  await job.instantbuyList(lucid, '75dcafb17dc8c6e77636f022b932618b5ed2a6cda9a1fe4ddd414737' + '43727573747954686550616e63616b65', 50_000_000n, Data.to(job.treasuryDatum))
+)
+*/
+/*
+console.log(
+  await job.offerList(lucid, '75dcafb17dc8c6e77636f022b932618b5ed2a6cda9a1fe4ddd414737', '43727573747954686550616e63616b65' , 5_000_000n, Data.to(job.treasuryDatum))
+)
+*/
+
+console.log(
+  await job.offerProceedInstant(
+    lucid,
+    {
+      txHash: '16a710bbdb3bd7804e79c5fc5c868dd8cf1931062920c7f8ae4e64b4e6ee3cf7',
+      outputIndex: 0
+    }, 
+    {
+      txHash: '52cda7d1fc9229adfa2561fa45876336e25f362a2b66cbf5ecb5c05229baa36c',
+      outputIndex: 0
+    }, 
+    '75dcafb17dc8c6e77636f022b932618b5ed2a6cda9a1fe4ddd414737', 
+    '43727573747954686550616e63616b65',
+    Data.to(job.treasuryDatum))
+)
+
+/*
 console.log(await job.offerProceed(
   lucid, 
   {
@@ -79,3 +109,4 @@ console.log(await job.offerProceed(
   "4372757374795468654d6f6f6e",
   Data.to(job.treasuryDatum)
 ))
+*/
