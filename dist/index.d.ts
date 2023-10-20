@@ -1,110 +1,100 @@
-import { Lucid, OutRef, PolicyId, Unit, C, Constr, UTxO } from "lucid-cardano";
-export declare const TREASURY_MINT_NAME = "WITHDRAW_TREASURY";
-export declare const INSTANTBUY_MINT_NAME = "INSTANT_BUY";
-export declare const OFFER_MINT_NAME = "ACCEPT_OFFER";
-export declare const UTXO_MIN_ADA = 2000000n;
-export type UTxOs = {
-    protocolParams: OutRef;
-    treasuryScript: OutRef;
-    treasuryPolicy: OutRef;
-    instantbuyScript: OutRef;
-    instantbuyPolicy: OutRef;
-    offerScript: OutRef;
-    offerPolicy: OutRef;
+import { Lucid, Script, Constr, PolicyId, Unit, Tx, UTxO, OutRef } from "lucid-cardano";
+export type Portion = {
+    percent: number;
+    treasury: string;
 };
-export type Hashes = {
-    treasuryScript: String;
-    treasuryPolicy: String;
-    instantbuyScript: String;
-    instantbuyPolicy: String;
-    offerScript: String;
-    offerPolicy: String;
+export type WantedAsset = {
+    policyId: string;
+    assetName: string | undefined;
 };
-export type Context = {
-    utxos: UTxOs;
-    hashes: Hashes;
-    jobToken: PolicyId;
-    jobTokenName: string;
-    jobTokenCount: number;
-    stakes: string[];
-};
-export type InstantBuyDatum = {
+export type InstantBuyDatumV1 = {
     beneficier: string;
+    listingMarketDatum: string;
+    listingAffiliateDatum: string;
     amount: bigint;
-    listing: string;
-    affiliate: string | undefined;
-    royalty: string | undefined;
-    percent: bigint | undefined;
+    royalty: Portion | undefined;
 };
-export type OfferDatum = {
-    offerrer: string;
-    policyId: PolicyId;
-    name: string;
+export type OfferDatumV1 = {
+    beneficier: string;
+    listingMarketDatum: string;
+    listingAffiliateDatum: string;
     amount: bigint;
-    listing: string;
-    affiliate: string | undefined;
-    royalty: string | undefined;
-    percent: bigint | undefined;
+    wantedAsset: WantedAsset;
+    royalty: Portion | undefined;
 };
+export declare function version(): string;
+export declare function getValidator(title: string): any;
+export declare function getCompiledCode(title: string): Script;
+export declare function applyCodeParamas(code: Script, params: any): Script;
+export declare function getCompiledCodeParams(title: string, params: any): Script;
+export declare function getRewardAddress(lucid: Lucid, stake: string): string;
 export declare function encodeAddress(paymentPubKeyHex: string, stakingPubKeyHex?: string): Constr<any>;
 export declare function encodeTreasuryDatumAddress(paymentPubKeyHex: string, stakingPubKeyHex?: string): Constr<any>;
-export declare function encodeTreasuryDatumTokens(currencySymbol: string, minTokens: BigInt): Constr<any>;
-export declare function encodeRoyalty(royaltyWM?: C.PlutusData, percent?: number): Constr<any>;
-export declare const encodeWantedAsset: (policyIdHex: string, tokenNameHex?: string) => Constr<string> | Constr<Constr<string>>;
-export declare class JoB {
-    ctx: Context;
-    constructor(ctx: Context);
-    get treasuryDatum(): Constr<any>;
-    getTreasuryAddress(lucid: Lucid, stake: number): string;
-    getInstantbuyAddress(lucid: Lucid, stake?: number): string;
-    getOfferAddress(lucid: Lucid, stake?: number): string;
-    /**
-     * Get free treasuries
-     * @param lucid
-     * @returns UTxOs
-     */
-    getTreasuries(lucid: Lucid): Promise<UTxO[]>;
-    getEncodedAddress(lucid: Lucid): Promise<Constr<any>>;
+export declare const encodeTreasuryDatumTokens: (currencySymbol: string, minTokens: BigInt) => Constr<any>;
+export declare function encodeRoyalty(portion?: Portion): Constr<any>;
+export declare function encodeWantedAsset(wantedAsset: WantedAsset): Constr<any>;
+/**
+ * Mint new unique asset
+ *
+ * @param lucid
+ * @param name
+ * @param amount
+ * @returns transaction hash
+ */
+export declare function mintUniqueAsset(lucid: Lucid, name: string, amount: bigint): Promise<string>;
+export declare class JamOnBreadAdminV1 {
+    private static numberOfStakes;
+    private static numberOfToken;
+    private static treasuryScriptTitle;
+    private static instantBuyScriptTitle;
+    private static offerScriptTitle;
+    private static minimumAdaAmount;
+    private static minimumJobFee;
+    private jamTokenPolicy;
+    private jamTokenName;
+    private jamStakes;
+    private lucid;
+    private treasuryScript;
+    private instantBuyScript;
+    private offerScript;
+    private treasuryDatum;
+    static getTreasuryScript(): Script;
+    static getJamStakes(lucid: Lucid, policyId: PolicyId, amount: bigint, number: bigint): string[];
+    constructor(lucid: Lucid, jamTokenPolicy: string, jamTokenName: string);
+    createJobToken(): Constr<any>;
+    payJoBToken(tx: Tx, amount: bigint): Promise<Tx>;
+    squashNft(): Promise<OutRef>;
+    getInstantBuyScript(): Script;
+    getOfferScript(): Script;
+    getTreasuryAddress(stakeId?: number): string;
+    getEncodedAddress(): Promise<Constr<any>>;
+    getInstantBuyAddress(stakeId?: number): string;
+    getOfferAddress(stakeId?: number): string;
+    getTreasuries(): Promise<UTxO[]>;
     getTreasury(treasuries: UTxO[], datum: string): UTxO | undefined;
-    parseInstantbuyDatum(lucid: Lucid, datumString: string): InstantBuyDatum;
-    parseOfferDatum(lucid: Lucid, datumString: string): OfferDatum;
-    getInstantbuys(lucid: Lucid): Promise<UTxO[]>;
-    treasuryCreate(lucid: Lucid, datum: string, stake: number): Promise<OutRef>;
-    treasuryCreateToken(lucid: Lucid, stake?: number): Promise<OutRef>;
-    treasuryCreateAddress(lucid: Lucid, stake?: number, address?: string): Promise<OutRef>;
-    treasuryWithdraw(lucid: Lucid, datum: String, type: "Token" | "Address"): Promise<OutRef>;
-    instantbuyList(lucid: Lucid, unit: Unit, price: bigint, listing: string, affiliate?: string, royalty?: string, percent?: number): Promise<{
+    parseRoyalty(datum: Constr<any>): Portion | undefined;
+    parseWantedAsset(datum: Constr<any>): WantedAsset;
+    parseBeneficier(datum: Constr<any>): string;
+    parseInstantbuyDatum(datumString: string): InstantBuyDatumV1;
+    parseOfferDatum(datumString: string): OfferDatumV1;
+    addToTreasuries(treasuries: Record<string, bigint>, datum: string, value: bigint): void;
+    payToTreasuries(tx: Tx, payToTreasuries: Record<string, bigint>, force: boolean): Promise<Tx>;
+    instantBuyListTx(tx: Tx, unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx>;
+    instantbuyList(unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<string>;
+    instantBuyCancelTx(tx: Tx, utxo: UTxO | OutRef): Promise<Tx>;
+    instantBuyCancel(utxo: OutRef): Promise<string>;
+    instantBuyUpdateTx(tx: Tx, unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx>;
+    instantBuyUpdate(unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<string>;
+    instantBuyProceed(utxo: OutRef, force?: boolean, ...sellMarketPortions: Portion[]): Promise<string>;
+    offerListTx(tx: Tx, asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx>;
+    offerList(asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<{
         txHash: string;
         outputIndex: number;
     }>;
-    instantBuyCancel(lucid: Lucid, utxo: OutRef): Promise<{
-        txHash: string;
-        outputIndex: number;
-    }>;
-    instantBuyCancelUnit(lucid: Lucid, unit: Unit): Promise<{
-        txHash: string;
-        outputIndex: number;
-    }>;
-    instantBuyUpdate(lucid: Lucid, unit: Unit, price: bigint, listing: string, affiliate?: string, royalty?: string, percent?: number): Promise<{
-        txHash: string;
-        outputIndex: number;
-    }>;
-    instantBuyProceed(lucid: Lucid, utxo: OutRef, marketTreasury: string): Promise<{
-        txHash: string;
-        outputIndex: number;
-    }>;
-    instantBuyProceedUnit(lucid: Lucid, unit: Unit, marketTreasury: string): Promise<{
-        txHash: string;
-        outputIndex: number;
-    }>;
-    offerList(lucid: Lucid, policyId: PolicyId, name: string | undefined, price: bigint, listing: string, affiliate?: string, royalty?: string, percent?: number): Promise<OutRef>;
-    offerCancel(lucid: Lucid, outRefs: OutRef[]): Promise<OutRef>;
-    offerProceed(lucid: Lucid, utxo: OutRef, policyId: PolicyId, name: string, marketTreasury: string): Promise<{
-        txHash: string;
-        outputIndex: number;
-    }>;
-    offerProceedInstant(lucid: Lucid, utxoInstant: OutRef, utxoOffer: OutRef, policyId: PolicyId, name: string, marketTreasury: string): Promise<{
-        txHash: string;
-        outputIndex: number;
-    }>;
+    offerCancelTx(tx: Tx, utxo: UTxO | OutRef): Promise<Tx>;
+    offerCancel(utxo: OutRef): Promise<string>;
+    offerUpdateTx(tx: Tx, utxo: UTxO | OutRef, asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx>;
+    offerUpdate(utxo: UTxO | OutRef, asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<string>;
+    offerProceed(utxo: OutRef, unit: Unit, force?: boolean, ...sellMarketPortions: Portion[]): Promise<string>;
+    finishTx(tx: Tx): Promise<string>;
 }

@@ -7,9 +7,7 @@
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "dist/index.d.ts",
-    "dist/index.js",
-    "dist/index.js.map"
+    "/dist"
   ],
   "dependencies": {
     "lucid-cardano": "^0.10.7"
