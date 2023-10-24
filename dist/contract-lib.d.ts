@@ -1,20 +1,21 @@
-import { Lucid, Script, Constr, PolicyId, Unit, Tx, UTxO, OutRef } from "lucid-cardano";
-export type Portion = {
+import { Script, Lucid, Constr, PolicyId, Tx, OutRef, UTxO, Unit } from 'lucid-cardano';
+
+type Portion = {
     percent: number;
     treasury: string;
 };
-export type WantedAsset = {
+type WantedAsset = {
     policyId: string;
     assetName: string | undefined;
 };
-export type InstantBuyDatumV1 = {
+type InstantBuyDatumV1 = {
     beneficier: string;
     listingMarketDatum: string;
     listingAffiliateDatum: string;
     amount: bigint;
     royalty: Portion | undefined;
 };
-export type OfferDatumV1 = {
+type OfferDatumV1 = {
     beneficier: string;
     listingMarketDatum: string;
     listingAffiliateDatum: string;
@@ -22,17 +23,17 @@ export type OfferDatumV1 = {
     wantedAsset: WantedAsset;
     royalty: Portion | undefined;
 };
-export declare function version(): string;
-export declare function getValidator(title: string): any;
-export declare function getCompiledCode(title: string): Script;
-export declare function applyCodeParamas(code: Script, params: any): Script;
-export declare function getCompiledCodeParams(title: string, params: any): Script;
-export declare function getRewardAddress(lucid: Lucid, stake: string): string;
-export declare function encodeAddress(paymentPubKeyHex: string, stakingPubKeyHex?: string): Constr<any>;
-export declare function encodeTreasuryDatumAddress(paymentPubKeyHex: string, stakingPubKeyHex?: string): Constr<any>;
-export declare const encodeTreasuryDatumTokens: (currencySymbol: string, minTokens: BigInt) => Constr<any>;
-export declare function encodeRoyalty(portion?: Portion): Constr<any>;
-export declare function encodeWantedAsset(wantedAsset: WantedAsset): Constr<any>;
+declare function version(): string;
+declare function getValidator(title: string): any;
+declare function getCompiledCode(title: string): Script;
+declare function applyCodeParamas(code: Script, params: any): Script;
+declare function getCompiledCodeParams(title: string, params: any): Script;
+declare function getRewardAddress(lucid: Lucid, stake: string): string;
+declare function encodeAddress(paymentPubKeyHex: string, stakingPubKeyHex?: string): Constr<any>;
+declare function encodeTreasuryDatumAddress(paymentPubKeyHex: string, stakingPubKeyHex?: string): Constr<any>;
+declare const encodeTreasuryDatumTokens: (currencySymbol: string, minTokens: BigInt) => Constr<any>;
+declare function encodeRoyalty(portion?: Portion): Constr<any>;
+declare function encodeWantedAsset(wantedAsset: WantedAsset): Constr<any>;
 /**
  * Mint new unique asset
  *
@@ -41,8 +42,8 @@ export declare function encodeWantedAsset(wantedAsset: WantedAsset): Constr<any>
  * @param amount
  * @returns transaction hash
  */
-export declare function mintUniqueAsset(lucid: Lucid, name: string, amount: bigint): Promise<string>;
-export declare class JamOnBreadAdminV1 {
+declare function mintUniqueAsset(lucid: Lucid, name: string, amount: bigint): Promise<string>;
+declare class JamOnBreadAdminV1 {
     private static numberOfStakes;
     private static numberOfToken;
     private static treasuryScriptTitle;
@@ -98,3 +99,5 @@ export declare class JamOnBreadAdminV1 {
     offerProceed(utxo: OutRef, unit: Unit, force?: boolean, ...sellMarketPortions: Portion[]): Promise<string>;
     finishTx(tx: Tx): Promise<string>;
 }
+
+export { type InstantBuyDatumV1, JamOnBreadAdminV1, type OfferDatumV1, type Portion, type WantedAsset, applyCodeParamas, encodeAddress, encodeRoyalty, encodeTreasuryDatumAddress, encodeTreasuryDatumTokens, encodeWantedAsset, getCompiledCode, getCompiledCodeParams, getRewardAddress, getValidator, mintUniqueAsset, version };
