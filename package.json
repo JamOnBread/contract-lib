@@ -3,29 +3,31 @@
   "version": "1.0.3",
   "type": "module",
   "description": "JoB smart contract manipulation",
-  "main": "dist/index.js",
-  "module": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/contract-lib.esm.js",
+  "types": "dist/contract-lib.d.ts",
   "files": [
-    "dist/index.d.ts",
-    "dist/index.js",
-    "dist/index.js.map"
+    "/dist"
   ],
   "dependencies": {
     "lucid-cardano": "^0.10.7"
   },
   "devDependencies": {
-    "@types/node": "^20.4.4",
-    "npm-run-all": "^4.1.5",
-    "typescript": "^5.1.6",
-    "mocha": "^10.2.0",
-    "ts-node": "^10.9.1",
+    "@rollup/plugin-typescript": "^11.1.5",
     "@types/chai": "^4.3.5",
     "@types/mocha": "^10.0.1",
-    "chai": "^4.3.7"
+    "@types/node": "^20.4.4",
+    "chai": "^4.3.7",
+    "dts": "^0.1.1",
+    "mocha": "^10.2.0",
+    "npm-run-all": "^4.1.5",
+    "rollup": "^4.1.4",
+    "rollup-plugin-dts": "^6.1.0",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.1.6"
   },
   "scripts": {
-    "build": "tsc --build --clean && tsc",
+    "clean": "rm -r dist/*",
+    "build": "rollup -c --configPlugin typescript",
     "test": "ts-node example.ts --noemit"
   }
 }
