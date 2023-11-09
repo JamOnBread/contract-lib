@@ -9,11 +9,11 @@ export default [
         output: [
             {
                 file: pkg.main,
-                format: 'cjs',
+                format: 'es',
                 sourcemap: true,
             }, {
-                file: pkg.main.replace('.cjs.js', '.esm.js'),
-                format: 'es',
+                file: pkg.main.replace('.esm.js', '.cjs.js'),
+                format: 'cjs',
                 sourcemap: true,
             },
         ],
