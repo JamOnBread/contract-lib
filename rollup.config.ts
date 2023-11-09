@@ -12,7 +12,7 @@ export default [
                 format: 'cjs',
                 sourcemap: true,
             }, {
-                file: pkg.module,
+                file: pkg.main.replace('.cjs.js', '.esm.js'),
                 format: 'es',
                 sourcemap: true,
             },
