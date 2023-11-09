@@ -5,6 +5,7 @@
   "description": "JoB smart contract manipulation",
   "main": "dist/contract-lib.esm.js",
   "types": "dist/contract-lib.d.ts",
+  "module": "dist/contract-lib.esm.js",
   "files": [
     "/dist"
   ],
