@@ -747,8 +747,8 @@ class JamOnBreadAdminV1 {
     static treasuryScriptTitle = "treasury.spend_v1";
     static instantBuyScriptTitle = "instant_buy.spend_v1";
     static offerScriptTitle = "offer.spend_v1";
-    static minimumAdaAmount = 2000000n;
-    static minimumJobFee = 100000n;
+    minimumAdaAmount = 2000000n;
+    minimumJobFee = 100000n;
     jamTokenPolicy = "74ce41370dd9103615c8399c51f47ecee980467ecbfcfbec5b59d09a";
     jamTokenName = "556e69717565";
     jamStakes;
@@ -1002,7 +1002,7 @@ class JamOnBreadAdminV1 {
         ]);
         tx = tx.payToContract(this.getInstantBuyAddress(), { inline: lucidCardano.Data.to(datum) }, {
             [unit]: BigInt(1),
-            lovelace: JamOnBreadAdminV1.minimumAdaAmount
+            lovelace: this.minimumAdaAmount
         });
         return tx;
     }
@@ -1046,7 +1046,7 @@ class JamOnBreadAdminV1 {
         const provision = 0.025 * Number(params.amount);
         console.debug("Instant buy", params);
         const payToTreasuries = {
-            [lucidCardano.Data.to(this.treasuryDatum)]: BigInt(Math.max(Math.ceil(provision * 0.1), Number(JamOnBreadAdminV1.minimumJobFee)))
+            [lucidCardano.Data.to(this.treasuryDatum)]: BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.minimumJobFee)))
         };
         this.addToTreasuries(payToTreasuries, params.listingMarketDatum, BigInt(Math.ceil(Number(provision) * 0.2)));
         this.addToTreasuries(payToTreasuries, params.listingAffiliateDatum, BigInt(Math.ceil(Number(provision) * 0.2)));
@@ -1088,7 +1088,7 @@ class JamOnBreadAdminV1 {
             encodeRoyalty(royalty)
         ]);
         tx = tx.payToContract(this.getOfferAddress(), { inline: lucidCardano.Data.to(datum) }, {
-            lovelace: JamOnBreadAdminV1.minimumAdaAmount + price
+            lovelace: this.minimumAdaAmount + price
         });
         return tx;
     }
@@ -1131,7 +1131,7 @@ class JamOnBreadAdminV1 {
         const provision = 0.025 * Number(params.amount);
         console.debug("Offer", params);
         const payToTreasuries = {
-            [lucidCardano.Data.to(this.treasuryDatum)]: BigInt(Math.max(Math.ceil(provision * 0.1), Number(JamOnBreadAdminV1.minimumJobFee)))
+            [lucidCardano.Data.to(this.treasuryDatum)]: BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.minimumJobFee)))
         };
         this.addToTreasuries(payToTreasuries, params.listingMarketDatum, BigInt(Math.ceil(Number(provision) * 0.2)));
         this.addToTreasuries(payToTreasuries, params.listingAffiliateDatum, BigInt(Math.ceil(Number(provision) * 0.2)));
@@ -1156,7 +1156,7 @@ class JamOnBreadAdminV1 {
         ], buyRedeemer)
             .attachSpendingValidator(this.offerScript);
         buildTx = buildTx.payToAddress(params.beneficier, {
-            lovelace: JamOnBreadAdminV1.minimumAdaAmount,
+            lovelace: this.minimumAdaAmount,
             [unit]: 1n
         });
         buildTx = await this.payToTreasuries(buildTx, payToTreasuries, false);

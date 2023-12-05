@@ -159,20 +159,20 @@ export class JamOnBreadAdminV1 {
     private static treasuryScriptTitle: string = "treasury.spend_v1"
     private static instantBuyScriptTitle: string = "instant_buy.spend_v1"
     private static offerScriptTitle: string = "offer.spend_v1"
-    private static minimumAdaAmount: bigint = 2_000_000n
-    private static minimumJobFee: bigint = 100_000n
+    readonly minimumAdaAmount: bigint = 2_000_000n
+    readonly minimumJobFee: bigint = 100_000n
 
-    private jamTokenPolicy: string = "74ce41370dd9103615c8399c51f47ecee980467ecbfcfbec5b59d09a"
-    private jamTokenName: string = "556e69717565"
-    private jamStakes: string[]
-    private lucid: Lucid
+    readonly jamTokenPolicy: string = "74ce41370dd9103615c8399c51f47ecee980467ecbfcfbec5b59d09a"
+    readonly jamTokenName: string = "556e69717565"
+    readonly jamStakes: string[]
+    readonly lucid: Lucid
 
 
     private treasuryScript: Script
     private instantBuyScript: Script
     private offerScript: Script
 
-    private treasuryDatum: Constr<any>
+    readonly treasuryDatum: Constr<any>
 
     public static getTreasuryScript(): Script {
         return getCompiledCode(JamOnBreadAdminV1.treasuryScriptTitle)
@@ -504,7 +504,7 @@ export class JamOnBreadAdminV1 {
             { inline: Data.to(datum) },
             {
                 [unit]: BigInt(1),
-                lovelace: JamOnBreadAdminV1.minimumAdaAmount
+                lovelace: this.minimumAdaAmount
             }
         )
 
@@ -560,7 +560,7 @@ export class JamOnBreadAdminV1 {
 
         console.debug("Instant buy", params)
         const payToTreasuries: Record<string, bigint> = {
-            [Data.to(this.treasuryDatum)]: BigInt(Math.max(Math.ceil(provision * 0.1), Number(JamOnBreadAdminV1.minimumJobFee)))
+            [Data.to(this.treasuryDatum)]: BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.minimumJobFee)))
         }
         this.addToTreasuries(payToTreasuries, params.listingMarketDatum, BigInt(Math.ceil(Number(provision) * 0.2)))
         this.addToTreasuries(payToTreasuries, params.listingAffiliateDatum, BigInt(Math.ceil(Number(provision) * 0.2)))
@@ -622,7 +622,7 @@ export class JamOnBreadAdminV1 {
             this.getOfferAddress(),
             { inline: Data.to(datum) },
             {
-                lovelace: JamOnBreadAdminV1.minimumAdaAmount + price
+                lovelace: this.minimumAdaAmount + price
             }
         )
 
@@ -678,7 +678,7 @@ export class JamOnBreadAdminV1 {
 
         console.debug("Offer", params)
         const payToTreasuries: Record<string, bigint> = {
-            [Data.to(this.treasuryDatum)]: BigInt(Math.max(Math.ceil(provision * 0.1), Number(JamOnBreadAdminV1.minimumJobFee)))
+            [Data.to(this.treasuryDatum)]: BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.minimumJobFee)))
         }
         this.addToTreasuries(payToTreasuries, params.listingMarketDatum, BigInt(Math.ceil(Number(provision) * 0.2)))
         this.addToTreasuries(payToTreasuries, params.listingAffiliateDatum, BigInt(Math.ceil(Number(provision) * 0.2)))
@@ -717,7 +717,7 @@ export class JamOnBreadAdminV1 {
         buildTx = buildTx.payToAddress(
             params.beneficier,
             {
-                lovelace: JamOnBreadAdminV1.minimumAdaAmount,
+                lovelace: this.minimumAdaAmount,
                 [unit]: 1n
             }
         )
