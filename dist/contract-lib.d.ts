@@ -49,18 +49,19 @@ declare class JamOnBreadAdminV1 {
     private static treasuryScriptTitle;
     private static instantBuyScriptTitle;
     private static offerScriptTitle;
+    private static stakingScriptTitle;
     readonly minimumAdaAmount: bigint;
     readonly minimumJobFee: bigint;
     readonly jamTokenPolicy: string;
     readonly jamTokenName: string;
-    readonly jamStakes: string[];
+    readonly jamStakes: Map<String, Script>;
     readonly lucid: Lucid;
     private treasuryScript;
     private instantBuyScript;
     private offerScript;
     readonly treasuryDatum: Constr<any>;
     static getTreasuryScript(): Script;
-    static getJamStakes(lucid: Lucid, policyId: PolicyId, amount: bigint, number: bigint): string[];
+    static getJamStakes(lucid: Lucid, policyId: PolicyId, amount: bigint, number: bigint): Map<string, Script>;
     constructor(lucid: Lucid, jamTokenPolicy: string, jamTokenName: string);
     createJobToken(): Constr<any>;
     payJoBToken(tx: Tx, amount: bigint): Promise<Tx>;
@@ -97,6 +98,11 @@ declare class JamOnBreadAdminV1 {
     offerUpdateTx(tx: Tx, utxo: UTxO | OutRef, asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx>;
     offerUpdate(utxo: UTxO | OutRef, asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<string>;
     offerProceed(utxo: OutRef, unit: Unit, force?: boolean, ...sellMarketPortions: Portion[]): Promise<string>;
+    registerStakeTx(tx: Tx, stake: string): Tx;
+    registerStakes(stakes: string[]): Promise<string>;
+    delegateTx(tx: Tx, stake: string, poolId: string): Tx;
+    delegate(stake: string, poolId: string): Promise<string>;
+    addJobTokens(tx: Tx): Promise<Tx>;
     finishTx(tx: Tx): Promise<string>;
 }
 

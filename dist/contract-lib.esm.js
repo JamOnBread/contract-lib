@@ -745,10 +745,11 @@ class JamOnBreadAdminV1 {
     static treasuryScriptTitle = "treasury.spend_v1";
     static instantBuyScriptTitle = "instant_buy.spend_v1";
     static offerScriptTitle = "offer.spend_v1";
+    static stakingScriptTitle = "staking.withdrawal_v1";
     minimumAdaAmount = 2000000n;
     minimumJobFee = 100000n;
-    jamTokenPolicy = "74ce41370dd9103615c8399c51f47ecee980467ecbfcfbec5b59d09a";
-    jamTokenName = "556e69717565";
+    jamTokenPolicy; // = "74ce41370dd9103615c8399c51f47ecee980467ecbfcfbec5b59d09a"
+    jamTokenName; // = "556e69717565"
     jamStakes;
     lucid;
     treasuryScript;
@@ -759,10 +760,10 @@ class JamOnBreadAdminV1 {
         return getCompiledCode(JamOnBreadAdminV1.treasuryScriptTitle);
     }
     static getJamStakes(lucid, policyId, amount, number) {
-        const stakes = [];
+        const stakes = new Map();
         for (let i = 1n; i <= number; i++) {
-            const code = getCompiledCodeParams('staking.withdrawal_v1', [encodeTreasuryDatumTokens(policyId, amount), BigInt(i)]);
-            stakes.push(lucid.utils.validatorToScriptHash(code));
+            const code = getCompiledCodeParams(JamOnBreadAdminV1.stakingScriptTitle, [encodeTreasuryDatumTokens(policyId, amount), BigInt(i)]);
+            stakes.set(lucid.utils.validatorToScriptHash(code), code);
         }
         return stakes;
     }
@@ -774,12 +775,12 @@ class JamOnBreadAdminV1 {
         this.treasuryScript = JamOnBreadAdminV1.getTreasuryScript();
         this.instantBuyScript = applyCodeParamas(this.getInstantBuyScript(), [
             this.lucid.utils.validatorToScriptHash(this.treasuryScript),
-            Array.from(this.jamStakes.map(stakeHash => new Constr(0, [new Constr(1, [stakeHash])]))),
+            Array.from(Array.from(this.jamStakes.keys()).map(stakeHash => new Constr(0, [new Constr(1, [stakeHash])]))),
             this.createJobToken()
         ]);
         this.offerScript = applyCodeParamas(this.getOfferScript(), [
             this.lucid.utils.validatorToScriptHash(this.treasuryScript),
-            Array.from(this.jamStakes.map(stakeHash => new Constr(0, [new Constr(1, [stakeHash])]))),
+            Array.from(Array.from(this.jamStakes.keys()).map(stakeHash => new Constr(0, [new Constr(1, [stakeHash])]))),
             this.createJobToken()
         ]);
         this.treasuryDatum = this.createJobToken();
@@ -830,14 +831,14 @@ class JamOnBreadAdminV1 {
     }
     getTreasuryAddress(stakeId) {
         if (typeof stakeId === "undefined")
-            stakeId = stakeId || Math.round(Math.random() * this.jamStakes.length);
+            stakeId = stakeId || Math.round(Math.random() * this.jamStakes.size);
         const paymentCredential = {
             type: "Script",
             hash: this.lucid.utils.validatorToScriptHash(this.treasuryScript)
         };
         const stakeCredential = {
             type: "Script",
-            hash: this.jamStakes[stakeId]
+            hash: Array.from(this.jamStakes.keys())[stakeId]
         };
         return this.lucid.utils.credentialToAddress(paymentCredential, stakeCredential);
     }
@@ -854,27 +855,27 @@ class JamOnBreadAdminV1 {
     }
     getInstantBuyAddress(stakeId) {
         if (typeof stakeId === "undefined")
-            stakeId = stakeId || Math.round(Math.random() * this.jamStakes.length);
+            stakeId = stakeId || Math.round(Math.random() * this.jamStakes.size);
         const paymentCredential = {
             type: "Script",
             hash: this.lucid.utils.validatorToScriptHash(this.instantBuyScript)
         };
         const stakeCredential = {
             type: "Script",
-            hash: this.jamStakes[stakeId]
+            hash: Array.from(this.jamStakes.keys())[stakeId]
         };
         return this.lucid.utils.credentialToAddress(paymentCredential, stakeCredential);
     }
     getOfferAddress(stakeId) {
         if (typeof stakeId === "undefined")
-            stakeId = stakeId || Math.round(Math.random() * this.jamStakes.length);
+            stakeId = stakeId || Math.round(Math.random() * this.jamStakes.size);
         const paymentCredential = {
             type: "Script",
             hash: this.lucid.utils.validatorToScriptHash(this.offerScript)
         };
         const stakeCredential = {
             type: "Script",
-            hash: this.jamStakes[stakeId]
+            hash: Array.from(this.jamStakes.keys())[stakeId]
         };
         return this.lucid.utils.credentialToAddress(paymentCredential, stakeCredential);
     }
@@ -1159,6 +1160,34 @@ class JamOnBreadAdminV1 {
         });
         buildTx = await this.payToTreasuries(buildTx, payToTreasuries, false);
         return await this.finishTx(buildTx);
+    }
+    registerStakeTx(tx, stake) {
+        let newTx = tx.registerStake(stake);
+        return newTx;
+    }
+    async registerStakes(stakes) {
+        let newTx = this.lucid.newTx();
+        for (let stake of stakes) {
+            newTx = newTx.registerStake(stake);
+        }
+        newTx = await this.addJobTokens(newTx);
+        return await this.finishTx(newTx);
+    }
+    delegateTx(tx, stake, poolId) {
+        const credential = this.lucid.utils.scriptHashToCredential(stake);
+        const rewardAddress = this.lucid.utils.credentialToRewardAddress(credential);
+        let newTx = tx.delegateTo(rewardAddress, poolId, Data.void());
+        return newTx;
+    }
+    async delegate(stake, poolId) {
+        let newTx = this.lucid.newTx();
+        newTx = this.delegateTx(newTx, stake, poolId);
+        newTx = await this.addJobTokens(newTx);
+        newTx = newTx.attachWithdrawalValidator(this.jamStakes.get(stake));
+        return await this.finishTx(newTx);
+    }
+    async addJobTokens(tx) {
+        return tx.payToAddress(await this.lucid.wallet.address(), { [this.jamTokenPolicy + this.jamTokenName]: JamOnBreadAdminV1.numberOfToken });
     }
     async finishTx(tx) {
         const txComplete = await tx.complete();

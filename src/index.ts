@@ -1,4 +1,4 @@
-import { Lucid, Blockfrost, Script, Constr, Data, PolicyId, Unit, fromText, Tx, UTxO, OutRef, Credential, applyParamsToScript } from "lucid-cardano"
+import { Lucid, Blockfrost, Script, Constr, Data, PolicyId, Unit, fromText, Tx, UTxO, OutRef, Credential, applyParamsToScript, PoolId } from "lucid-cardano"
 import { plutus } from "./plutus"
 
 export type Portion = {
@@ -159,12 +159,13 @@ export class JamOnBreadAdminV1 {
     private static treasuryScriptTitle: string = "treasury.spend_v1"
     private static instantBuyScriptTitle: string = "instant_buy.spend_v1"
     private static offerScriptTitle: string = "offer.spend_v1"
+    private static stakingScriptTitle: string = "staking.withdrawal_v1"
     readonly minimumAdaAmount: bigint = 2_000_000n
     readonly minimumJobFee: bigint = 100_000n
 
-    readonly jamTokenPolicy: string = "74ce41370dd9103615c8399c51f47ecee980467ecbfcfbec5b59d09a"
-    readonly jamTokenName: string = "556e69717565"
-    readonly jamStakes: string[]
+    readonly jamTokenPolicy: string // = "74ce41370dd9103615c8399c51f47ecee980467ecbfcfbec5b59d09a"
+    readonly jamTokenName: string // = "556e69717565"
+    readonly jamStakes: Map<string, Script>
     readonly lucid: Lucid
 
 
@@ -179,16 +180,16 @@ export class JamOnBreadAdminV1 {
     }
 
 
-    public static getJamStakes(lucid: Lucid, policyId: PolicyId, amount: bigint, number: bigint): string[] {
-        const stakes: string[] = []
+    public static getJamStakes(lucid: Lucid, policyId: PolicyId, amount: bigint, number: bigint): Map<string, Script> {
+        const stakes: Map<string, Script> = new Map()
 
         for (let i = 1n; i <= number; i++) {
             const code = getCompiledCodeParams(
-                'staking.withdrawal_v1',
+                JamOnBreadAdminV1.stakingScriptTitle,
                 [encodeTreasuryDatumTokens(policyId, amount), BigInt(i)]
             )
 
-            stakes.push(lucid.utils.validatorToScriptHash(code))
+            stakes.set(lucid.utils.validatorToScriptHash(code), code)
         }
 
         return stakes
@@ -215,7 +216,7 @@ export class JamOnBreadAdminV1 {
             [
                 this.lucid.utils.validatorToScriptHash(this.treasuryScript),
                 Array.from(
-                    this.jamStakes.map(stakeHash => new Constr(0, [new Constr(1, [stakeHash])]))
+                    Array.from(this.jamStakes.keys()).map(stakeHash => new Constr(0, [new Constr(1, [stakeHash])]))
                 ),
                 this.createJobToken()
             ]
@@ -225,7 +226,7 @@ export class JamOnBreadAdminV1 {
             [
                 this.lucid.utils.validatorToScriptHash(this.treasuryScript),
                 Array.from(
-                    this.jamStakes.map(stakeHash => new Constr(0, [new Constr(1, [stakeHash])]))
+                    Array.from(this.jamStakes.keys()).map(stakeHash => new Constr(0, [new Constr(1, [stakeHash])]))
                 ),
                 this.createJobToken()
             ]
@@ -291,7 +292,7 @@ export class JamOnBreadAdminV1 {
 
     getTreasuryAddress(stakeId?: number): string {
         if (typeof stakeId === "undefined")
-            stakeId = stakeId || Math.round(Math.random() * this.jamStakes.length)
+            stakeId = stakeId || Math.round(Math.random() * this.jamStakes.size)
 
         const paymentCredential = {
             type: "Script",
@@ -300,7 +301,7 @@ export class JamOnBreadAdminV1 {
 
         const stakeCredential = {
             type: "Script",
-            hash: this.jamStakes[stakeId]
+            hash: Array.from(this.jamStakes.keys())[stakeId]
         } as Credential
 
         return this.lucid.utils.credentialToAddress(paymentCredential, stakeCredential)
@@ -320,7 +321,7 @@ export class JamOnBreadAdminV1 {
 
     getInstantBuyAddress(stakeId?: number): string {
         if (typeof stakeId === "undefined")
-            stakeId = stakeId || Math.round(Math.random() * this.jamStakes.length)
+            stakeId = stakeId || Math.round(Math.random() * this.jamStakes.size)
 
         const paymentCredential = {
             type: "Script",
@@ -329,7 +330,7 @@ export class JamOnBreadAdminV1 {
 
         const stakeCredential = {
             type: "Script",
-            hash: this.jamStakes[stakeId]
+            hash: Array.from(this.jamStakes.keys())[stakeId]
         } as Credential
 
         return this.lucid.utils.credentialToAddress(paymentCredential, stakeCredential)
@@ -337,7 +338,7 @@ export class JamOnBreadAdminV1 {
 
     getOfferAddress(stakeId?: number): string {
         if (typeof stakeId === "undefined")
-            stakeId = stakeId || Math.round(Math.random() * this.jamStakes.length)
+            stakeId = stakeId || Math.round(Math.random() * this.jamStakes.size)
 
         const paymentCredential = {
             type: "Script",
@@ -346,7 +347,7 @@ export class JamOnBreadAdminV1 {
 
         const stakeCredential = {
             type: "Script",
-            hash: this.jamStakes[stakeId]
+            hash: Array.from(this.jamStakes.keys())[stakeId]
         } as Credential
 
         return this.lucid.utils.credentialToAddress(paymentCredential, stakeCredential)
@@ -724,6 +725,42 @@ export class JamOnBreadAdminV1 {
         buildTx = await this.payToTreasuries(buildTx, payToTreasuries, false)
 
         return await this.finishTx(buildTx)
+    }
+
+    registerStakeTx(tx: Tx, stake: string): Tx {
+        let newTx = tx.registerStake(stake)
+        return newTx
+    }
+
+    async registerStakes(stakes: string[]): Promise<string> {
+        let newTx = this.lucid.newTx()
+        for (let stake of stakes) {
+            newTx = newTx.registerStake(stake)
+        }
+        newTx = await this.addJobTokens(newTx)
+        return await this.finishTx(newTx)
+    }
+
+    delegateTx(tx: Tx, stake: string, poolId: string): Tx {
+        const credential = this.lucid.utils.scriptHashToCredential(stake)
+        const rewardAddress = this.lucid.utils.credentialToRewardAddress(credential)
+        let newTx = tx.delegateTo(rewardAddress, poolId, Data.void())
+        return newTx
+    }
+
+    async delegate(stake: string, poolId: string): Promise<string> {
+        let newTx = this.lucid.newTx()
+        newTx = this.delegateTx(newTx, stake, poolId)
+        newTx = await this.addJobTokens(newTx)
+        newTx = newTx.attachWithdrawalValidator(this.jamStakes.get(stake)!)
+        return await this.finishTx(newTx)
+    }
+
+    async addJobTokens(tx: Tx): Promise<Tx> {
+        return tx.payToAddress(
+            await this.lucid.wallet.address(),
+            { [this.jamTokenPolicy + this.jamTokenName]: JamOnBreadAdminV1.numberOfToken }
+        )
     }
 
     async finishTx(tx: Tx): Promise<string> {
