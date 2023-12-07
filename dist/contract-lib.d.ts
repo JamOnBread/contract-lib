@@ -54,7 +54,7 @@ declare class JamOnBreadAdminV1 {
     readonly minimumJobFee: bigint;
     readonly jamTokenPolicy: string;
     readonly jamTokenName: string;
-    readonly jamStakes: Map<String, Script>;
+    readonly jamStakes: Map<string, Script>;
     readonly lucid: Lucid;
     private treasuryScript;
     private instantBuyScript;
@@ -102,6 +102,8 @@ declare class JamOnBreadAdminV1 {
     registerStakes(stakes: string[]): Promise<string>;
     delegateTx(tx: Tx, stake: string, poolId: string): Tx;
     delegate(stake: string, poolId: string): Promise<string>;
+    withdrawTx(tx: Tx, stake: string, amount: bigint): Tx;
+    withdraw(stake: string, amount: bigint): Promise<string>;
     addJobTokens(tx: Tx): Promise<Tx>;
     finishTx(tx: Tx): Promise<string>;
 }

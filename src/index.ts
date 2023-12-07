@@ -756,6 +756,21 @@ export class JamOnBreadAdminV1 {
         return await this.finishTx(newTx)
     }
 
+    withdrawTx(tx: Tx, stake: string, amount: bigint): Tx {
+        const credential = this.lucid.utils.scriptHashToCredential(stake)
+        const rewardAddress = this.lucid.utils.credentialToRewardAddress(credential)
+        let newTx = tx.withdraw(rewardAddress, amount, Data.void())
+        return newTx
+    }
+
+    async withdraw(stake: string, amount: bigint): Promise<string> {
+        let newTx = this.lucid.newTx()
+        newTx = this.withdrawTx(newTx, stake, amount)
+        newTx = await this.addJobTokens(newTx)
+        newTx = newTx.attachWithdrawalValidator(this.jamStakes.get(stake)!)
+        return await this.finishTx(newTx)
+    }
+
     async addJobTokens(tx: Tx): Promise<Tx> {
         return tx.payToAddress(
             await this.lucid.wallet.address(),

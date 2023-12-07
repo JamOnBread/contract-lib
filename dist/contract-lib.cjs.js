@@ -1188,6 +1188,19 @@ class JamOnBreadAdminV1 {
         newTx = newTx.attachWithdrawalValidator(this.jamStakes.get(stake));
         return await this.finishTx(newTx);
     }
+    withdrawTx(tx, stake, amount) {
+        const credential = this.lucid.utils.scriptHashToCredential(stake);
+        const rewardAddress = this.lucid.utils.credentialToRewardAddress(credential);
+        let newTx = tx.withdraw(rewardAddress, amount, lucidCardano.Data.void());
+        return newTx;
+    }
+    async withdraw(stake, amount) {
+        let newTx = this.lucid.newTx();
+        newTx = this.withdrawTx(newTx, stake, amount);
+        newTx = await this.addJobTokens(newTx);
+        newTx = newTx.attachWithdrawalValidator(this.jamStakes.get(stake));
+        return await this.finishTx(newTx);
+    }
     async addJobTokens(tx) {
         return tx.payToAddress(await this.lucid.wallet.address(), { [this.jamTokenPolicy + this.jamTokenName]: JamOnBreadAdminV1.numberOfToken });
     }
