@@ -785,7 +785,7 @@ class JamOnBreadAdminV1 {
             Array.from(Array.from(this.jamStakes.keys()).map(stakeHash => new lucidCardano.Constr(0, [new lucidCardano.Constr(1, [stakeHash])]))),
             this.createJobToken()
         ]);
-        this.treasuryDatum = this.createJobToken();
+        this.treasuryDatum = lucidCardano.Data.to(this.createJobToken());
     }
     createJobToken() {
         return encodeTreasuryDatumTokens(this.jamTokenPolicy, BigInt(Math.floor(Number(JamOnBreadAdminV1.numberOfToken) / 2) + 1));
@@ -949,8 +949,8 @@ class JamOnBreadAdminV1 {
     parseOfferDatum(datumString) {
         const datum = lucidCardano.Data.from(datumString);
         const beneficier = this.parseBeneficier(datum.fields[0]);
-        const listingMarketDatum = lucidCardano.Data.to(datum.fields[1]);
-        const listingAffiliateDatum = datum.fields[2].index == 0 ? lucidCardano.Data.to(datum.fields[2].fields[0]) : listingMarketDatum;
+        const listingMarketDatum = lucidCardano.Data.to(datum.fields[1]).toLowerCase();
+        const listingAffiliateDatum = (datum.fields[2].index == 0 ? lucidCardano.Data.to(datum.fields[2].fields[0]) : listingMarketDatum).toLowerCase();
         const amount = datum.fields[3];
         const wantedAsset = this.parseWantedAsset(datum.fields[4]);
         const royalty = this.parseRoyalty(datum.fields[5]);
@@ -991,7 +991,7 @@ class JamOnBreadAdminV1 {
     }
     async instantBuyListTx(tx, unit, price, listing, affiliate, royalty) {
         if (typeof listing == "undefined") {
-            listing = lucidCardano.Data.to(this.treasuryDatum);
+            listing = this.treasuryDatum;
         }
         const sellerAddr = await this.getEncodedAddress();
         const datum = new lucidCardano.Constr(0, [
@@ -1047,15 +1047,15 @@ class JamOnBreadAdminV1 {
         const provision = 0.025 * Number(params.amount);
         console.debug("Instant buy", params);
         const payToTreasuries = {
-            [lucidCardano.Data.to(this.treasuryDatum)]: BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.minimumJobFee)))
+            [this.treasuryDatum]: BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.minimumJobFee)))
         };
         this.addToTreasuries(payToTreasuries, params.listingMarketDatum, BigInt(Math.ceil(Number(provision) * 0.2)));
         this.addToTreasuries(payToTreasuries, params.listingAffiliateDatum, BigInt(Math.ceil(Number(provision) * 0.2)));
         for (let portion of sellMarketPortions) {
-            this.addToTreasuries(payToTreasuries, portion.treasury, BigInt(Math.ceil(Number(provision) * 0.5 * portion.percent)));
+            this.addToTreasuries(payToTreasuries, portion.treasury.toLowerCase(), BigInt(Math.ceil(Number(provision) * 0.5 * portion.percent)));
         }
         if (params.royalty) {
-            this.addToTreasuries(payToTreasuries, params.royalty.treasury, BigInt(Math.ceil(Number(params.amount) * params.royalty.percent)));
+            this.addToTreasuries(payToTreasuries, params.royalty.treasury.toLowerCase(), BigInt(Math.ceil(Number(params.amount) * params.royalty.percent)));
         }
         const buyRedeemer = lucidCardano.Data.to(new lucidCardano.Constr(0, [
             sellMarketPortions.map(portion => new lucidCardano.Constr(0, [
@@ -1077,7 +1077,7 @@ class JamOnBreadAdminV1 {
     }
     async offerListTx(tx, asset, price, listing, affiliate, royalty) {
         if (typeof listing == "undefined") {
-            listing = lucidCardano.Data.to(this.treasuryDatum);
+            listing = this.treasuryDatum;
         }
         const offererAddr = await this.getEncodedAddress();
         const datum = new lucidCardano.Constr(0, [
@@ -1132,15 +1132,15 @@ class JamOnBreadAdminV1 {
         const provision = 0.025 * Number(params.amount);
         console.debug("Offer", params);
         const payToTreasuries = {
-            [lucidCardano.Data.to(this.treasuryDatum)]: BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.minimumJobFee)))
+            [this.treasuryDatum]: BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.minimumJobFee)))
         };
-        this.addToTreasuries(payToTreasuries, params.listingMarketDatum, BigInt(Math.ceil(Number(provision) * 0.2)));
-        this.addToTreasuries(payToTreasuries, params.listingAffiliateDatum, BigInt(Math.ceil(Number(provision) * 0.2)));
+        this.addToTreasuries(payToTreasuries, params.listingMarketDatum.toLocaleLowerCase(), BigInt(Math.ceil(Number(provision) * 0.2)));
+        this.addToTreasuries(payToTreasuries, params.listingAffiliateDatum.toLowerCase(), BigInt(Math.ceil(Number(provision) * 0.2)));
         for (let portion of sellMarketPortions) {
-            this.addToTreasuries(payToTreasuries, portion.treasury, BigInt(Math.ceil(Number(provision) * 0.5 * portion.percent)));
+            this.addToTreasuries(payToTreasuries, portion.treasury.toLowerCase(), BigInt(Math.ceil(Number(provision) * 0.5 * portion.percent)));
         }
         if (params.royalty) {
-            this.addToTreasuries(payToTreasuries, params.royalty.treasury, BigInt(Math.ceil(Number(params.amount) * params.royalty.percent)));
+            this.addToTreasuries(payToTreasuries, params.royalty.treasury.toLowerCase(), BigInt(Math.ceil(Number(params.amount) * params.royalty.percent)));
         }
         const buyRedeemer = lucidCardano.Data.to(new lucidCardano.Constr(0, [
             sellMarketPortions.map(portion => new lucidCardano.Constr(0, [

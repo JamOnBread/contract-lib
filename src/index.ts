@@ -173,7 +173,7 @@ export class JamOnBreadAdminV1 {
     private instantBuyScript: Script
     private offerScript: Script
 
-    readonly treasuryDatum: Constr<any>
+    readonly treasuryDatum: string
 
     public static getTreasuryScript(): Script {
         return getCompiledCode(JamOnBreadAdminV1.treasuryScriptTitle)
@@ -232,7 +232,7 @@ export class JamOnBreadAdminV1 {
             ]
         )
 
-        this.treasuryDatum = this.createJobToken()
+        this.treasuryDatum = Data.to(this.createJobToken())
     }
 
     public createJobToken(): Constr<any> {
@@ -432,8 +432,8 @@ export class JamOnBreadAdminV1 {
         const datum: Constr<any> = Data.from(datumString)
 
         const beneficier = this.parseBeneficier(datum.fields[0])
-        const listingMarketDatum = Data.to(datum.fields[1])
-        const listingAffiliateDatum = datum.fields[2].index == 0 ? Data.to(datum.fields[2].fields[0]) : listingMarketDatum
+        const listingMarketDatum = Data.to(datum.fields[1]).toLowerCase()
+        const listingAffiliateDatum = (datum.fields[2].index == 0 ? Data.to(datum.fields[2].fields[0]) : listingMarketDatum).toLowerCase()
         const amount = datum.fields[3]
         const wantedAsset = this.parseWantedAsset(datum.fields[4])
         const royalty = this.parseRoyalty(datum.fields[5])
@@ -488,7 +488,7 @@ export class JamOnBreadAdminV1 {
 
     async instantBuyListTx(tx: Tx, unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx> {
         if (typeof listing == "undefined") {
-            listing = Data.to(this.treasuryDatum)
+            listing = this.treasuryDatum
         }
 
         const sellerAddr = await this.getEncodedAddress()
@@ -561,17 +561,17 @@ export class JamOnBreadAdminV1 {
 
         console.debug("Instant buy", params)
         const payToTreasuries: Record<string, bigint> = {
-            [Data.to(this.treasuryDatum)]: BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.minimumJobFee)))
+            [this.treasuryDatum]: BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.minimumJobFee)))
         }
         this.addToTreasuries(payToTreasuries, params.listingMarketDatum, BigInt(Math.ceil(Number(provision) * 0.2)))
         this.addToTreasuries(payToTreasuries, params.listingAffiliateDatum, BigInt(Math.ceil(Number(provision) * 0.2)))
 
         for (let portion of sellMarketPortions) {
-            this.addToTreasuries(payToTreasuries, portion.treasury, BigInt(Math.ceil(Number(provision) * 0.5 * portion.percent)))
+            this.addToTreasuries(payToTreasuries, portion.treasury.toLowerCase(), BigInt(Math.ceil(Number(provision) * 0.5 * portion.percent)))
         }
 
         if (params.royalty) {
-            this.addToTreasuries(payToTreasuries, params.royalty.treasury, BigInt(Math.ceil(Number(params.amount) * params.royalty.percent)))
+            this.addToTreasuries(payToTreasuries, params.royalty.treasury.toLowerCase(), BigInt(Math.ceil(Number(params.amount) * params.royalty.percent)))
         }
 
         const buyRedeemer = Data.to(new Constr(0, [
@@ -606,7 +606,7 @@ export class JamOnBreadAdminV1 {
 
     async offerListTx(tx: Tx, asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx> {
         if (typeof listing == "undefined") {
-            listing = Data.to(this.treasuryDatum)
+            listing = this.treasuryDatum
         }
 
         const offererAddr = await this.getEncodedAddress()
@@ -679,17 +679,17 @@ export class JamOnBreadAdminV1 {
 
         console.debug("Offer", params)
         const payToTreasuries: Record<string, bigint> = {
-            [Data.to(this.treasuryDatum)]: BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.minimumJobFee)))
+            [this.treasuryDatum]: BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.minimumJobFee)))
         }
-        this.addToTreasuries(payToTreasuries, params.listingMarketDatum, BigInt(Math.ceil(Number(provision) * 0.2)))
-        this.addToTreasuries(payToTreasuries, params.listingAffiliateDatum, BigInt(Math.ceil(Number(provision) * 0.2)))
+        this.addToTreasuries(payToTreasuries, params.listingMarketDatum.toLocaleLowerCase(), BigInt(Math.ceil(Number(provision) * 0.2)))
+        this.addToTreasuries(payToTreasuries, params.listingAffiliateDatum.toLowerCase(), BigInt(Math.ceil(Number(provision) * 0.2)))
 
         for (let portion of sellMarketPortions) {
-            this.addToTreasuries(payToTreasuries, portion.treasury, BigInt(Math.ceil(Number(provision) * 0.5 * portion.percent)))
+            this.addToTreasuries(payToTreasuries, portion.treasury.toLowerCase(), BigInt(Math.ceil(Number(provision) * 0.5 * portion.percent)))
         }
 
         if (params.royalty) {
-            this.addToTreasuries(payToTreasuries, params.royalty.treasury, BigInt(Math.ceil(Number(params.amount) * params.royalty.percent)))
+            this.addToTreasuries(payToTreasuries, params.royalty.treasury.toLowerCase(), BigInt(Math.ceil(Number(params.amount) * params.royalty.percent)))
         }
 
         const buyRedeemer = Data.to(new Constr(0, [

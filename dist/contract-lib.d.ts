@@ -59,7 +59,7 @@ declare class JamOnBreadAdminV1 {
     private treasuryScript;
     private instantBuyScript;
     private offerScript;
-    readonly treasuryDatum: Constr<any>;
+    readonly treasuryDatum: string;
     static getTreasuryScript(): Script;
     static getJamStakes(lucid: Lucid, policyId: PolicyId, amount: bigint, number: bigint): Map<string, Script>;
     constructor(lucid: Lucid, jamTokenPolicy: string, jamTokenName: string);
