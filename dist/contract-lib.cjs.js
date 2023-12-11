@@ -742,12 +742,12 @@ async function mintUniqueAsset(lucid, name, amount) {
     return txHash;
 }
 class JamOnBreadAdminV1 {
-    static numberOfStakes = 10n;
-    static numberOfToken = 1n;
     static treasuryScriptTitle = "treasury.spend_v1";
     static instantBuyScriptTitle = "instant_buy.spend_v1";
     static offerScriptTitle = "offer.spend_v1";
     static stakingScriptTitle = "staking.withdrawal_v1";
+    numberOfStakes = 10n;
+    numberOfToken = 1n;
     minimumAdaAmount = 2000000n;
     minimumJobFee = 100000n;
     jamTokenPolicy; // = "74ce41370dd9103615c8399c51f47ecee980467ecbfcfbec5b59d09a"
@@ -773,7 +773,7 @@ class JamOnBreadAdminV1 {
         this.lucid = lucid;
         this.jamTokenPolicy = jamTokenPolicy;
         this.jamTokenName = jamTokenName;
-        this.jamStakes = JamOnBreadAdminV1.getJamStakes(lucid, this.jamTokenPolicy, JamOnBreadAdminV1.numberOfToken, JamOnBreadAdminV1.numberOfStakes);
+        this.jamStakes = JamOnBreadAdminV1.getJamStakes(lucid, this.jamTokenPolicy, this.numberOfToken, this.numberOfStakes);
         this.treasuryScript = JamOnBreadAdminV1.getTreasuryScript();
         this.instantBuyScript = applyCodeParamas(this.getInstantBuyScript(), [
             this.lucid.utils.validatorToScriptHash(this.treasuryScript),
@@ -788,7 +788,16 @@ class JamOnBreadAdminV1 {
         this.treasuryDatum = lucidCardano.Data.to(this.createJobToken());
     }
     createJobToken() {
-        return encodeTreasuryDatumTokens(this.jamTokenPolicy, BigInt(Math.floor(Number(JamOnBreadAdminV1.numberOfToken) / 2) + 1));
+        return encodeTreasuryDatumTokens(this.jamTokenPolicy, this.numberOfToken);
+    }
+    addressToDatum(address) {
+        const credential = this.lucid.utils.paymentCredentialOf(address);
+        const datum = encodeTreasuryDatumAddress(credential.hash);
+        return lucidCardano.Data.to(datum);
+    }
+    tokenToDatum(policyId, minTokens) {
+        const datum = encodeTreasuryDatumTokens(policyId, minTokens);
+        return lucidCardano.Data.to(datum);
     }
     async payJoBToken(tx, amount) {
         return tx.payToAddress(await this.lucid.wallet.address(), {
@@ -880,6 +889,32 @@ class JamOnBreadAdminV1 {
             hash: Array.from(this.jamStakes.keys())[stakeId]
         };
         return this.lucid.utils.credentialToAddress(paymentCredential, stakeCredential);
+    }
+    createTreasuryTx(tx, unique, total, datum, amount = 2000000n) {
+        const start = Math.floor(Math.random() * this.jamStakes.size);
+        const uniqueStakes = [];
+        // Set numbers to list
+        for (let i = 0; i < unique; i++) {
+            uniqueStakes.push((start + i * 13) % this.jamStakes.size);
+        }
+        for (let i = 0; i < total; i++) {
+            tx = tx.payToContract(this.getTreasuryAddress(uniqueStakes[i % uniqueStakes.length]), { inline: datum }, { lovelace: amount });
+        }
+        return tx;
+    }
+    async createTreasury(unique, total, datum, amount = 2000000n) {
+        let tx = this.lucid.newTx();
+        tx = this.createTreasuryTx(tx, unique, total, datum, amount);
+        return await this.finishTx(tx);
+    }
+    async createTreasuryAddress(address, unique, total, data, amount = 2000000n) {
+        const credential = this.lucid.utils.paymentCredentialOf(address);
+        const datum = encodeTreasuryDatumAddress(credential.hash);
+        return await this.createTreasury(unique, total, lucidCardano.Data.to(datum), amount);
+    }
+    async createTreasuryToken(policyId, minTokens, unique, total, data, amount = 2000000n) {
+        const datum = encodeTreasuryDatumTokens(policyId, minTokens);
+        return await this.createTreasury(unique, total, lucidCardano.Data.to(datum), amount);
     }
     async getTreasuries() {
         const address = this.getTreasuryAddress(0);
@@ -1202,7 +1237,7 @@ class JamOnBreadAdminV1 {
         return await this.finishTx(newTx);
     }
     async addJobTokens(tx) {
-        return tx.payToAddress(await this.lucid.wallet.address(), { [this.jamTokenPolicy + this.jamTokenName]: JamOnBreadAdminV1.numberOfToken });
+        return tx.payToAddress(await this.lucid.wallet.address(), { [this.jamTokenPolicy + this.jamTokenName]: this.numberOfToken });
     }
     async finishTx(tx) {
         const txComplete = await tx.complete();

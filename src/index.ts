@@ -1,4 +1,4 @@
-import { Lucid, Blockfrost, Script, Constr, Data, PolicyId, Unit, fromText, Tx, UTxO, OutRef, Credential, applyParamsToScript, PoolId } from "lucid-cardano"
+import { Lucid, Script, Constr, Data, PolicyId, Unit, fromText, Tx, UTxO, OutRef, Credential, applyParamsToScript } from "lucid-cardano"
 import { plutus } from "./plutus"
 
 export type Portion = {
@@ -71,7 +71,7 @@ export function getRewardAddress(lucid: Lucid, stake: string): string {
 export function encodeAddress(
     paymentPubKeyHex: string,
     stakingPubKeyHex?: string
-): Constr<any> {
+): Constr<Data> {
     const paymentCredential = new Constr(0, [paymentPubKeyHex])
 
     const stakingCredential = stakingPubKeyHex
@@ -84,26 +84,27 @@ export function encodeAddress(
 export function encodeTreasuryDatumAddress(
     paymentPubKeyHex: string,
     stakingPubKeyHex?: string
-): Constr<any> {
+): Constr<Data> {
     const address = encodeAddress(paymentPubKeyHex, stakingPubKeyHex)
     return new Constr(0, [address])
 }
 
+
 export const encodeTreasuryDatumTokens = (
     currencySymbol: string,
-    minTokens: BigInt
-): Constr<any> => {
+    minTokens: bigint
+): Constr<Data> => {
     return new Constr(1, [new Constr(0, [currencySymbol, minTokens])]);
 };
 
-export function encodeRoyalty(portion?: Portion): Constr<any> {
+export function encodeRoyalty(portion?: Portion): Constr<Data> {
     return portion
         ? new Constr(0, [new Constr(0, [BigInt(portion.percent * 10_000), Data.from(portion.treasury)])])
         : new Constr(1, []);
 }
 
 
-export function encodeWantedAsset(wantedAsset: WantedAsset): Constr<any> {
+export function encodeWantedAsset(wantedAsset: WantedAsset): Constr<Data> {
     return wantedAsset.assetName ?
         new Constr(0, [new Constr(0, [wantedAsset.policyId, wantedAsset.assetName])]) :
         new Constr(1, [wantedAsset.policyId])
@@ -154,12 +155,13 @@ export async function mintUniqueAsset(lucid: Lucid, name: string, amount: bigint
 
 
 export class JamOnBreadAdminV1 {
-    private static numberOfStakes: bigint = 10n
-    private static numberOfToken: bigint = 1n
     private static treasuryScriptTitle: string = "treasury.spend_v1"
     private static instantBuyScriptTitle: string = "instant_buy.spend_v1"
     private static offerScriptTitle: string = "offer.spend_v1"
     private static stakingScriptTitle: string = "staking.withdrawal_v1"
+    readonly numberOfStakes: bigint = 10n
+    readonly numberOfToken: bigint = 1n
+
     readonly minimumAdaAmount: bigint = 2_000_000n
     readonly minimumJobFee: bigint = 100_000n
 
@@ -206,8 +208,8 @@ export class JamOnBreadAdminV1 {
         this.jamStakes = JamOnBreadAdminV1.getJamStakes(
             lucid,
             this.jamTokenPolicy,
-            JamOnBreadAdminV1.numberOfToken,
-            JamOnBreadAdminV1.numberOfStakes
+            this.numberOfToken,
+            this.numberOfStakes
         )
 
         this.treasuryScript = JamOnBreadAdminV1.getTreasuryScript()
@@ -235,8 +237,19 @@ export class JamOnBreadAdminV1 {
         this.treasuryDatum = Data.to(this.createJobToken())
     }
 
-    public createJobToken(): Constr<any> {
-        return encodeTreasuryDatumTokens(this.jamTokenPolicy, BigInt(Math.floor(Number(JamOnBreadAdminV1.numberOfToken) / 2) + 1))
+    public createJobToken(): Data {
+        return encodeTreasuryDatumTokens(this.jamTokenPolicy, this.numberOfToken)
+    }
+
+    public addressToDatum(address: string): string {
+        const credential = this.lucid.utils.paymentCredentialOf(address)
+        const datum = encodeTreasuryDatumAddress(credential.hash)
+        return Data.to(datum)
+    }
+
+    public tokenToDatum(policyId: string, minTokens: bigint): string {
+        const datum = encodeTreasuryDatumTokens(policyId, minTokens)
+        return Data.to(datum)
     }
 
     async payJoBToken(tx: Tx, amount: bigint): Promise<Tx> {
@@ -351,6 +364,46 @@ export class JamOnBreadAdminV1 {
         } as Credential
 
         return this.lucid.utils.credentialToAddress(paymentCredential, stakeCredential)
+    }
+
+    createTreasuryTx(tx: Tx, unique: number, total: number, datum: string, amount: bigint = 2_000_000n): Tx {
+        const start = Math.floor(Math.random() * this.jamStakes.size)
+        const uniqueStakes: number[] = []
+
+        // Set numbers to list
+        for (let i = 0; i < unique; i++) {
+            uniqueStakes.push((start + i * 13) % this.jamStakes.size)
+        }
+
+        for (let i = 0; i < total; i++) {
+            tx = tx.payToContract(
+                this.getTreasuryAddress(uniqueStakes[i % uniqueStakes.length]),
+                { inline: datum },
+                { lovelace: amount }
+            )
+        }
+
+        return tx
+    }
+
+    async createTreasury(unique: number, total: number, datum: string, amount: bigint = 2_000_000n): Promise<string> {
+        let tx = this.lucid.newTx()
+        tx = this.createTreasuryTx(tx, unique, total, datum, amount)
+
+        return await this.finishTx(tx)
+    }
+
+    async createTreasuryAddress(address: string, unique: number, total: number, data: string, amount: bigint = 2000_000n): Promise<string> {
+        const credential = this.lucid.utils.paymentCredentialOf(address)
+        const datum = encodeTreasuryDatumAddress(credential.hash)
+
+        return await this.createTreasury(unique, total, Data.to(datum), amount)
+    }
+
+    async createTreasuryToken(policyId: string, minTokens: bigint, unique: number, total: number, data: string, amount: bigint = 2_000_000n): Promise<string> {
+        const datum = encodeTreasuryDatumTokens(policyId, minTokens)
+
+        return await this.createTreasury(unique, total, Data.to(datum), amount)
     }
 
     async getTreasuries(): Promise<UTxO[]> {
@@ -774,7 +827,7 @@ export class JamOnBreadAdminV1 {
     async addJobTokens(tx: Tx): Promise<Tx> {
         return tx.payToAddress(
             await this.lucid.wallet.address(),
-            { [this.jamTokenPolicy + this.jamTokenName]: JamOnBreadAdminV1.numberOfToken }
+            { [this.jamTokenPolicy + this.jamTokenName]: this.numberOfToken }
         )
     }
 

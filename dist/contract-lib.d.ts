@@ -1,4 +1,4 @@
-import { Script, Lucid, Constr, PolicyId, Tx, OutRef, UTxO, Unit } from 'lucid-cardano';
+import { Script, Lucid, Constr, Data, PolicyId, Tx, OutRef, UTxO, Unit } from 'lucid-cardano';
 
 type Portion = {
     percent: number;
@@ -29,11 +29,11 @@ declare function getCompiledCode(title: string): Script;
 declare function applyCodeParamas(code: Script, params: any): Script;
 declare function getCompiledCodeParams(title: string, params: any): Script;
 declare function getRewardAddress(lucid: Lucid, stake: string): string;
-declare function encodeAddress(paymentPubKeyHex: string, stakingPubKeyHex?: string): Constr<any>;
-declare function encodeTreasuryDatumAddress(paymentPubKeyHex: string, stakingPubKeyHex?: string): Constr<any>;
-declare const encodeTreasuryDatumTokens: (currencySymbol: string, minTokens: BigInt) => Constr<any>;
-declare function encodeRoyalty(portion?: Portion): Constr<any>;
-declare function encodeWantedAsset(wantedAsset: WantedAsset): Constr<any>;
+declare function encodeAddress(paymentPubKeyHex: string, stakingPubKeyHex?: string): Constr<Data>;
+declare function encodeTreasuryDatumAddress(paymentPubKeyHex: string, stakingPubKeyHex?: string): Constr<Data>;
+declare const encodeTreasuryDatumTokens: (currencySymbol: string, minTokens: bigint) => Constr<Data>;
+declare function encodeRoyalty(portion?: Portion): Constr<Data>;
+declare function encodeWantedAsset(wantedAsset: WantedAsset): Constr<Data>;
 /**
  * Mint new unique asset
  *
@@ -44,12 +44,12 @@ declare function encodeWantedAsset(wantedAsset: WantedAsset): Constr<any>;
  */
 declare function mintUniqueAsset(lucid: Lucid, name: string, amount: bigint): Promise<string>;
 declare class JamOnBreadAdminV1 {
-    private static numberOfStakes;
-    private static numberOfToken;
     private static treasuryScriptTitle;
     private static instantBuyScriptTitle;
     private static offerScriptTitle;
     private static stakingScriptTitle;
+    readonly numberOfStakes: bigint;
+    readonly numberOfToken: bigint;
     readonly minimumAdaAmount: bigint;
     readonly minimumJobFee: bigint;
     readonly jamTokenPolicy: string;
@@ -63,15 +63,21 @@ declare class JamOnBreadAdminV1 {
     static getTreasuryScript(): Script;
     static getJamStakes(lucid: Lucid, policyId: PolicyId, amount: bigint, number: bigint): Map<string, Script>;
     constructor(lucid: Lucid, jamTokenPolicy: string, jamTokenName: string);
-    createJobToken(): Constr<any>;
+    createJobToken(): Data;
+    addressToDatum(address: string): string;
+    tokenToDatum(policyId: string, minTokens: bigint): string;
     payJoBToken(tx: Tx, amount: bigint): Promise<Tx>;
     squashNft(): Promise<OutRef>;
     getInstantBuyScript(): Script;
     getOfferScript(): Script;
     getTreasuryAddress(stakeId?: number): string;
-    getEncodedAddress(): Promise<Constr<any>>;
+    getEncodedAddress(): Promise<Constr<Data>>;
     getInstantBuyAddress(stakeId?: number): string;
     getOfferAddress(stakeId?: number): string;
+    createTreasuryTx(tx: Tx, unique: number, total: number, datum: string, amount?: bigint): Tx;
+    createTreasury(unique: number, total: number, datum: string, amount?: bigint): Promise<string>;
+    createTreasuryAddress(address: string, unique: number, total: number, data: string, amount?: bigint): Promise<string>;
+    createTreasuryToken(policyId: string, minTokens: bigint, unique: number, total: number, data: string, amount?: bigint): Promise<string>;
     getTreasuries(): Promise<UTxO[]>;
     getTreasury(treasuries: UTxO[], datum: string): UTxO | undefined;
     parseRoyalty(datum: Constr<any>): Portion | undefined;
