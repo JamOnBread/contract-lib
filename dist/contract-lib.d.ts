@@ -56,9 +56,9 @@ declare class JamOnBreadAdminV1 {
     readonly jamTokenName: string;
     readonly jamStakes: Map<string, Script>;
     readonly lucid: Lucid;
-    private treasuryScript;
-    private instantBuyScript;
-    private offerScript;
+    readonly treasuryScript: Script;
+    readonly instantBuyScript: Script;
+    readonly offerScript: Script;
     readonly treasuryDatum: string;
     static getTreasuryScript(): Script;
     static getJamStakes(lucid: Lucid, policyId: PolicyId, amount: bigint, number: bigint): Map<string, Script>;
@@ -78,6 +78,8 @@ declare class JamOnBreadAdminV1 {
     createTreasury(unique: number, total: number, datum: string, amount?: bigint): Promise<string>;
     createTreasuryAddress(address: string, unique: number, total: number, data: string, amount?: bigint): Promise<string>;
     createTreasuryToken(policyId: string, minTokens: bigint, unique: number, total: number, data: string, amount?: bigint): Promise<string>;
+    withdrawTreasuryTx(tx: Tx, utxos: OutRef[], datum: string, reduce?: boolean): Promise<Tx>;
+    withdrawTreasury(utxos: OutRef[], datum: string, reduce?: boolean): Promise<string>;
     getTreasuries(): Promise<UTxO[]>;
     getTreasury(treasuries: UTxO[], datum: string): UTxO | undefined;
     parseRoyalty(datum: Constr<any>): Portion | undefined;
