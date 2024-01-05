@@ -704,6 +704,19 @@ function encodeWantedAsset(wantedAsset) {
         new Constr(0, [new Constr(0, [wantedAsset.policyId, wantedAsset.assetName])]) :
         new Constr(1, [wantedAsset.policyId]);
 }
+function query(url, method, body) {
+    if (body) {
+        body = JSON.stringify(body, (_, v) => typeof v === 'bigint' ? Number(v) : v);
+    }
+    return fetch(url, {
+        headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        },
+        method,
+        body,
+    });
+}
 /**
  * Mint new unique asset
  *
@@ -744,12 +757,14 @@ class JamOnBreadAdminV1 {
     static instantBuyScriptTitle = "instant_buy.spend_v1";
     static offerScriptTitle = "offer.spend_v1";
     static stakingScriptTitle = "staking.withdrawal_v1";
+    jobApiUrl;
     numberOfStakes = 10n;
     numberOfToken = 1n;
     minimumAdaAmount = 2000000n;
     minimumJobFee = 100000n;
-    jamTokenPolicy; // = "74ce41370dd9103615c8399c51f47ecee980467ecbfcfbec5b59d09a"
-    jamTokenName; // = "556e69717565"
+    minimumFee = 20000n;
+    jamTokenPolicy;
+    jamTokenName;
     jamStakes;
     lucid;
     treasuryScript;
@@ -767,10 +782,11 @@ class JamOnBreadAdminV1 {
         }
         return stakes;
     }
-    constructor(lucid, jamTokenPolicy, jamTokenName) {
+    constructor(lucid, jobApiUrl, jamTokenPolicy, jamTokenName) {
         this.lucid = lucid;
-        this.jamTokenPolicy = jamTokenPolicy;
-        this.jamTokenName = jamTokenName;
+        this.jobApiUrl = jobApiUrl;
+        this.jamTokenPolicy = jamTokenPolicy || '74ce41370dd9103615c8399c51f47ecee980467ecbfcfbec5b59d09a';
+        this.jamTokenName = jamTokenName || '556e69717565';
         this.jamStakes = JamOnBreadAdminV1.getJamStakes(lucid, this.jamTokenPolicy, this.numberOfToken, this.numberOfStakes);
         this.treasuryScript = JamOnBreadAdminV1.getTreasuryScript();
         this.instantBuyScript = applyCodeParamas(this.getInstantBuyScript(), [
@@ -796,6 +812,16 @@ class JamOnBreadAdminV1 {
     tokenToDatum(policyId, minTokens) {
         const datum = encodeTreasuryDatumTokens(policyId, minTokens);
         return Data.to(datum);
+    }
+    async sign(payload) {
+        const address = await this.lucid.wallet.address();
+        const message = await this.lucid.wallet.signMessage(address, fromText(payload));
+        return {
+            address,
+            secret: payload,
+            signature: message.signature,
+            key: message.key
+        };
     }
     async payJoBToken(tx, amount) {
         return tx.payToAddress(await this.lucid.wallet.address(), {
@@ -905,7 +931,7 @@ class JamOnBreadAdminV1 {
         tx = this.createTreasuryTx(tx, unique, total, datum, amount);
         return await this.finishTx(tx);
     }
-    async createTreasuryAddress(address, unique, total, data, amount = 2000000n) {
+    async createTreasuryAddress(address, unique, total, amount = 2000000n) {
         const credential = this.lucid.utils.paymentCredentialOf(address);
         const datum = encodeTreasuryDatumAddress(credential.hash);
         return await this.createTreasury(unique, total, Data.to(datum), amount);
@@ -940,9 +966,30 @@ class JamOnBreadAdminV1 {
         tx = tx.addSigner(await this.lucid.wallet.address());
         return await this.finishTx(tx);
     }
-    async getTreasuries() {
-        const address = this.getTreasuryAddress(0);
-        return await this.lucid.utxosAt(address);
+    async getTreasuriesReserve(utxo, affiliates, force) {
+        const url = `${this.jobApiUrl}treasury/reserve`;
+        const body = {
+            utxo,
+            affiliates,
+            force
+        };
+        const response = await query(url, 'POST', body);
+        return await response.json();
+    }
+    async getTreasuryUtxos(plutus) {
+        const url = `${this.jobApiUrl}treasury/utxos`;
+        const body = { plutus };
+        const response = await query(url, 'POST', body);
+        return await response.json();
+    }
+    async getTreasuryWithdraw(plutus) {
+        const url = `${this.jobApiUrl}treasury/withdraw`;
+        const body = {
+            plutus,
+            params: await this.sign(String(Date.now()))
+        };
+        const response = await query(url, 'POST', body);
+        return await response.json();
     }
     getTreasury(treasuries, datum) {
         const index = treasuries.findIndex((value) => {
@@ -970,8 +1017,8 @@ class JamOnBreadAdminV1 {
     parseWantedAsset(datum) {
         if (datum.index == 0) {
             return {
-                policyId: datum.fields[0],
-                assetName: datum.fields[1]
+                policyId: datum.fields[0].fields[0],
+                assetName: datum.fields[0].fields[1]
             };
         }
         else {
@@ -1023,27 +1070,27 @@ class JamOnBreadAdminV1 {
         };
     }
     addToTreasuries(treasuries, datum, value) {
-        if (datum in treasuries) {
-            treasuries[datum] = treasuries[datum] + value;
-        }
-        else {
-            treasuries[datum] = value;
-        }
+        const prev = treasuries.get(datum) || 0n;
+        treasuries.set(datum, prev + value);
     }
-    async payToTreasuries(tx, payToTreasuries, force) {
+    async payToTreasuries(tx, utxo, payToTreasuries, force) {
         // JoB treasury
-        const allTreasuries = await this.getTreasuries();
-        const collectFromTreasuries = {};
-        for (let datum in payToTreasuries) {
-            const treasury = this.getTreasury(allTreasuries, datum);
-            collectFromTreasuries[datum] = treasury;
+        const treasuryRequest = await this.getTreasuriesReserve(utxo, Array.from(payToTreasuries.keys()), force);
+        if (!treasuryRequest.all && !force) {
+            throw new Error('Treasuries are not avaible');
         }
-        tx = tx.collectFrom(Object.values(collectFromTreasuries), Data.void());
-        console.debug("Pay to treasuries", payToTreasuries);
+        const allTreasuries = await this.lucid.utxosByOutRef(Object.values(treasuryRequest.utxos));
         // Pay to treasuries
-        for (let datum in collectFromTreasuries) {
-            const treasury = collectFromTreasuries[datum];
-            tx = tx.payToContract(treasury.address, { inline: treasury.datum }, { lovelace: BigInt(treasury.assets.lovelace) + BigInt(payToTreasuries[datum]) });
+        for (let [datum, _] of payToTreasuries) {
+            const treasury = this.getTreasury(allTreasuries, datum);
+            // Treasury exists
+            if (treasury) {
+                tx = tx.collectFrom([treasury], Data.void()).payToContract(treasury.address, { inline: datum }, { lovelace: BigInt(treasury.assets.lovelace) + BigInt(Math.max(Number(this.minimumFee), Number(payToTreasuries.get(datum)))) });
+            }
+            // There is no free treasury
+            else {
+                tx = tx.payToContract(this.getTreasuryAddress(), { inline: datum }, { lovelace: BigInt(Math.max(Number(payToTreasuries.get(datum)), Number(this.minimumAdaAmount))) });
+            }
         }
         tx = tx.attachSpendingValidator(this.treasuryScript);
         return tx;
@@ -1104,14 +1151,12 @@ class JamOnBreadAdminV1 {
         ]);
         const params = this.parseInstantbuyDatum(collectUtxo.datum);
         const provision = 0.025 * Number(params.amount);
-        console.debug("Instant buy", params);
-        const payToTreasuries = {
-            [this.treasuryDatum]: BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.minimumJobFee)))
-        };
+        const payToTreasuries = new Map();
+        payToTreasuries.set(this.treasuryDatum, BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.minimumJobFee))));
         this.addToTreasuries(payToTreasuries, params.listingMarketDatum, BigInt(Math.ceil(Number(provision) * 0.2)));
         this.addToTreasuries(payToTreasuries, params.listingAffiliateDatum, BigInt(Math.ceil(Number(provision) * 0.2)));
         for (let portion of sellMarketPortions) {
-            this.addToTreasuries(payToTreasuries, portion.treasury.toLowerCase(), BigInt(Math.ceil(Number(provision) * 0.5 * portion.percent)));
+            this.addToTreasuries(payToTreasuries, portion.treasury.toLowerCase(), BigInt(Math.max(Math.ceil(Number(provision) * 0.5 * portion.percent), Number(this.minimumFee))));
         }
         if (params.royalty) {
             this.addToTreasuries(payToTreasuries, params.royalty.treasury.toLowerCase(), BigInt(Math.ceil(Number(params.amount) * params.royalty.percent)));
@@ -1131,7 +1176,7 @@ class JamOnBreadAdminV1 {
         ], buyRedeemer)
             .attachSpendingValidator(this.instantBuyScript);
         buildTx = buildTx.payToAddress(params.beneficier, { lovelace: params.amount + collectUtxo.assets.lovelace });
-        buildTx = await this.payToTreasuries(buildTx, payToTreasuries, false);
+        buildTx = await this.payToTreasuries(buildTx, utxo, payToTreasuries, force);
         return await this.finishTx(buildTx);
     }
     async offerListTx(tx, asset, price, listing, affiliate, royalty) {
@@ -1190,9 +1235,8 @@ class JamOnBreadAdminV1 {
         const params = this.parseOfferDatum(collectUtxo.datum);
         const provision = 0.025 * Number(params.amount);
         console.debug("Offer", params);
-        const payToTreasuries = {
-            [this.treasuryDatum]: BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.minimumJobFee)))
-        };
+        const payToTreasuries = new Map();
+        payToTreasuries.set(this.treasuryDatum, BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.minimumJobFee))));
         this.addToTreasuries(payToTreasuries, params.listingMarketDatum.toLocaleLowerCase(), BigInt(Math.ceil(Number(provision) * 0.2)));
         this.addToTreasuries(payToTreasuries, params.listingAffiliateDatum.toLowerCase(), BigInt(Math.ceil(Number(provision) * 0.2)));
         for (let portion of sellMarketPortions) {
@@ -1219,7 +1263,7 @@ class JamOnBreadAdminV1 {
             lovelace: this.minimumAdaAmount,
             [unit]: 1n
         });
-        buildTx = await this.payToTreasuries(buildTx, payToTreasuries, false);
+        buildTx = await this.payToTreasuries(buildTx, utxo, payToTreasuries, force);
         return await this.finishTx(buildTx);
     }
     registerStakeTx(tx, stake) {

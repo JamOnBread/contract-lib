@@ -1,6 +1,6 @@
 {
   "name": "job",
-  "version": "1.0.4",
+  "version": "1.0.6",
   "type": "module",
   "description": "JoB smart contract manipulation",
   "main": "dist/contract-lib.esm.js",

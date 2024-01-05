@@ -1,4 +1,4 @@
-import { Script, Lucid, Constr, Data, PolicyId, Tx, OutRef, UTxO, Unit } from 'lucid-cardano';
+import { OutRef, Script, Lucid, Constr, Data, PolicyId, Tx, UTxO, Unit } from 'lucid-cardano';
 
 type Portion = {
     percent: number;
@@ -22,6 +22,25 @@ type OfferDatumV1 = {
     amount: bigint;
     wantedAsset: WantedAsset;
     royalty: Portion | undefined;
+};
+type SignParams = {
+    address: string;
+    secret: string;
+    signature: string;
+    key: string;
+};
+type ReservationResponse = {
+    all: boolean;
+    blocked: boolean;
+    expiration: number;
+    utxos: Map<string, OutRef>;
+};
+type UtxosResponse = {
+    utxos: OutRef[];
+};
+type WithdrawResponse = {
+    utxos: OutRef[];
+    expiration: number;
 };
 declare function version(): string;
 declare function getValidator(title: string): any;
@@ -48,10 +67,12 @@ declare class JamOnBreadAdminV1 {
     private static instantBuyScriptTitle;
     private static offerScriptTitle;
     private static stakingScriptTitle;
+    private jobApiUrl;
     readonly numberOfStakes: bigint;
     readonly numberOfToken: bigint;
     readonly minimumAdaAmount: bigint;
     readonly minimumJobFee: bigint;
+    readonly minimumFee = 20000n;
     readonly jamTokenPolicy: string;
     readonly jamTokenName: string;
     readonly jamStakes: Map<string, Script>;
@@ -62,10 +83,11 @@ declare class JamOnBreadAdminV1 {
     readonly treasuryDatum: string;
     static getTreasuryScript(): Script;
     static getJamStakes(lucid: Lucid, policyId: PolicyId, amount: bigint, number: bigint): Map<string, Script>;
-    constructor(lucid: Lucid, jamTokenPolicy: string, jamTokenName: string);
+    constructor(lucid: Lucid, jobApiUrl: string, jamTokenPolicy?: string, jamTokenName?: string);
     createJobToken(): Data;
     addressToDatum(address: string): string;
     tokenToDatum(policyId: string, minTokens: bigint): string;
+    sign(payload: string): Promise<SignParams>;
     payJoBToken(tx: Tx, amount: bigint): Promise<Tx>;
     squashNft(): Promise<OutRef>;
     getInstantBuyScript(): Script;
@@ -76,19 +98,21 @@ declare class JamOnBreadAdminV1 {
     getOfferAddress(stakeId?: number): string;
     createTreasuryTx(tx: Tx, unique: number, total: number, datum: string, amount?: bigint): Tx;
     createTreasury(unique: number, total: number, datum: string, amount?: bigint): Promise<string>;
-    createTreasuryAddress(address: string, unique: number, total: number, data: string, amount?: bigint): Promise<string>;
+    createTreasuryAddress(address: string, unique: number, total: number, amount?: bigint): Promise<string>;
     createTreasuryToken(policyId: string, minTokens: bigint, unique: number, total: number, data: string, amount?: bigint): Promise<string>;
     withdrawTreasuryTx(tx: Tx, utxos: OutRef[], datum: string, reduce?: boolean): Promise<Tx>;
     withdrawTreasury(utxos: OutRef[], datum: string, reduce?: boolean): Promise<string>;
-    getTreasuries(): Promise<UTxO[]>;
+    getTreasuriesReserve(utxo: OutRef, affiliates: string[], force: boolean): Promise<ReservationResponse>;
+    getTreasuryUtxos(plutus: string): Promise<UtxosResponse>;
+    getTreasuryWithdraw(plutus: string): Promise<WithdrawResponse>;
     getTreasury(treasuries: UTxO[], datum: string): UTxO | undefined;
     parseRoyalty(datum: Constr<any>): Portion | undefined;
     parseWantedAsset(datum: Constr<any>): WantedAsset;
     parseBeneficier(datum: Constr<any>): string;
     parseInstantbuyDatum(datumString: string): InstantBuyDatumV1;
     parseOfferDatum(datumString: string): OfferDatumV1;
-    addToTreasuries(treasuries: Record<string, bigint>, datum: string, value: bigint): void;
-    payToTreasuries(tx: Tx, payToTreasuries: Record<string, bigint>, force: boolean): Promise<Tx>;
+    addToTreasuries(treasuries: Map<string, bigint>, datum: string, value: bigint): void;
+    payToTreasuries(tx: Tx, utxo: OutRef, payToTreasuries: Map<string, bigint>, force: boolean): Promise<Tx>;
     instantBuyListTx(tx: Tx, unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx>;
     instantbuyList(unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<string>;
     instantBuyCancelTx(tx: Tx, utxo: UTxO | OutRef): Promise<Tx>;
@@ -116,4 +140,4 @@ declare class JamOnBreadAdminV1 {
     finishTx(tx: Tx): Promise<string>;
 }
 
-export { type InstantBuyDatumV1, JamOnBreadAdminV1, type OfferDatumV1, type Portion, type WantedAsset, applyCodeParamas, encodeAddress, encodeRoyalty, encodeTreasuryDatumAddress, encodeTreasuryDatumTokens, encodeWantedAsset, getCompiledCode, getCompiledCodeParams, getRewardAddress, getValidator, mintUniqueAsset, version };
+export { type InstantBuyDatumV1, JamOnBreadAdminV1, type OfferDatumV1, type Portion, type ReservationResponse, type SignParams, type UtxosResponse, type WantedAsset, type WithdrawResponse, applyCodeParamas, encodeAddress, encodeRoyalty, encodeTreasuryDatumAddress, encodeTreasuryDatumTokens, encodeWantedAsset, getCompiledCode, getCompiledCodeParams, getRewardAddress, getValidator, mintUniqueAsset, version };
