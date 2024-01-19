@@ -100,11 +100,12 @@ declare class JamOnBreadAdminV1 {
     createTreasury(unique: number, total: number, datum: string, amount?: bigint): Promise<string>;
     createTreasuryAddress(address: string, unique: number, total: number, amount?: bigint): Promise<string>;
     createTreasuryToken(policyId: string, minTokens: bigint, unique: number, total: number, data: string, amount?: bigint): Promise<string>;
-    withdrawTreasuryTx(tx: Tx, utxos: OutRef[], datum: string, reduce?: boolean): Promise<Tx>;
-    withdrawTreasury(utxos: OutRef[], datum: string, reduce?: boolean): Promise<string>;
     getTreasuriesReserve(utxo: OutRef, affiliates: string[], force: boolean): Promise<ReservationResponse>;
     getTreasuryUtxos(plutus: string): Promise<UtxosResponse>;
     getTreasuryWithdraw(plutus: string): Promise<WithdrawResponse>;
+    withdrawTreasuryTx(tx: Tx, utxos: OutRef[], datum: string, reduce?: boolean): Promise<Tx>;
+    withdrawTreasuryRaw(utxos: OutRef[], datum: string, reduce?: boolean): Promise<string>;
+    withdrawTreasury(plutus: string, reduce?: boolean): Promise<string>;
     getTreasury(treasuries: UTxO[], datum: string): UTxO | undefined;
     parseRoyalty(datum: Constr<any>): Portion | undefined;
     parseWantedAsset(datum: Constr<any>): WantedAsset;

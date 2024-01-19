@@ -942,32 +942,6 @@ class JamOnBreadAdminV1 {
         const datum = encodeTreasuryDatumTokens(policyId, minTokens);
         return await this.createTreasury(unique, total, lucidCardano.Data.to(datum), amount);
     }
-    async withdrawTreasuryTx(tx, utxos, datum, reduce = false) {
-        const treasuries = new Map();
-        const collectFrom = await this.lucid.utxosByOutRef(utxos);
-        for (let utxo of collectFrom) {
-            if (utxo.datum == datum) {
-                tx.collectFrom([utxo], lucidCardano.Data.to(new lucidCardano.Constr(1, [])));
-                treasuries.set(utxo.address, (treasuries.get(utxo.address) || 0n) + utxo.assets.lovelace);
-                if (!reduce) {
-                    tx.payToContract(utxo.address, { inline: utxo.datum }, { lovelace: this.minimumAdaAmount });
-                }
-            }
-        }
-        if (reduce) {
-            for (let address of treasuries.keys()) {
-                tx.payToContract(address, { inline: datum }, { lovelace: this.minimumAdaAmount });
-            }
-        }
-        tx = tx.attachSpendingValidator(this.treasuryScript);
-        return tx;
-    }
-    async withdrawTreasury(utxos, datum, reduce = false) {
-        let tx = this.lucid.newTx();
-        tx = await this.withdrawTreasuryTx(tx, utxos, datum, reduce);
-        tx = tx.addSigner(await this.lucid.wallet.address());
-        return await this.finishTx(tx);
-    }
     async getTreasuriesReserve(utxo, affiliates, force) {
         const url = `${this.jobApiUrl}treasury/reserve`;
         const body = {
@@ -992,6 +966,36 @@ class JamOnBreadAdminV1 {
         };
         const response = await query(url, 'POST', body);
         return await response.json();
+    }
+    async withdrawTreasuryTx(tx, utxos, datum, reduce = false) {
+        const treasuries = new Map();
+        const collectFrom = await this.lucid.utxosByOutRef(utxos);
+        for (let utxo of collectFrom) {
+            if (utxo.datum == datum) {
+                tx.collectFrom([utxo], lucidCardano.Data.to(new lucidCardano.Constr(1, [])));
+                treasuries.set(utxo.address, (treasuries.get(utxo.address) || 0n) + utxo.assets.lovelace);
+                if (!reduce) {
+                    tx.payToContract(utxo.address, { inline: utxo.datum }, { lovelace: this.minimumAdaAmount });
+                }
+            }
+        }
+        if (reduce) {
+            for (let address of treasuries.keys()) {
+                tx.payToContract(address, { inline: datum }, { lovelace: this.minimumAdaAmount });
+            }
+        }
+        tx = tx.attachSpendingValidator(this.treasuryScript);
+        return tx;
+    }
+    async withdrawTreasuryRaw(utxos, datum, reduce = false) {
+        let tx = this.lucid.newTx();
+        tx = await this.withdrawTreasuryTx(tx, utxos, datum, reduce);
+        tx = tx.addSigner(await this.lucid.wallet.address());
+        return await this.finishTx(tx);
+    }
+    async withdrawTreasury(plutus, reduce = false) {
+        const treasuries = await this.getTreasuryWithdraw(plutus);
+        return await this.withdrawTreasuryRaw(treasuries.utxos, plutus, reduce);
     }
     getTreasury(treasuries, datum) {
         const index = treasuries.findIndex((value) => {

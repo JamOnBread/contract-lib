@@ -463,37 +463,6 @@ export class JamOnBreadAdminV1 {
         return await this.createTreasury(unique, total, Data.to(datum), amount)
     }
 
-    async withdrawTreasuryTx(tx: Tx, utxos: OutRef[], datum: string, reduce: boolean = false): Promise<Tx> {
-        const treasuries: Map<string, bigint> = new Map()
-        const collectFrom = await this.lucid.utxosByOutRef(utxos)
-
-        for (let utxo of collectFrom) {
-            if (utxo.datum! == datum) {
-                tx.collectFrom([utxo], Data.to(new Constr(1, [])))
-                treasuries.set(utxo.address, (treasuries.get(utxo.address) || 0n) + utxo.assets.lovelace)
-                if (!reduce) {
-                    tx.payToContract(utxo.address, { inline: utxo.datum! }, { lovelace: this.minimumAdaAmount })
-                }
-            }
-        }
-
-        if (reduce) {
-            for (let address of treasuries.keys()) {
-                tx.payToContract(address, { inline: datum }, { lovelace: this.minimumAdaAmount })
-            }
-        }
-
-        tx = tx.attachSpendingValidator(this.treasuryScript)
-        return tx
-    }
-
-    async withdrawTreasury(utxos: OutRef[], datum: string, reduce: boolean = false): Promise<string> {
-        let tx = this.lucid.newTx()
-        tx = await this.withdrawTreasuryTx(tx, utxos, datum, reduce)
-        tx = tx.addSigner(await this.lucid.wallet.address())
-        return await this.finishTx(tx)
-    }
-
     public async getTreasuriesReserve(utxo: OutRef, affiliates: string[], force: boolean): Promise<ReservationResponse> {
         const url = `${this.jobApiUrl}treasury/reserve`
         const body = {
@@ -523,6 +492,43 @@ export class JamOnBreadAdminV1 {
         const response = await query(url, 'POST', body)
 
         return await response.json() as WithdrawResponse
+    }
+
+
+    async withdrawTreasuryTx(tx: Tx, utxos: OutRef[], datum: string, reduce: boolean = false): Promise<Tx> {
+        const treasuries: Map<string, bigint> = new Map()
+        const collectFrom = await this.lucid.utxosByOutRef(utxos)
+
+        for (let utxo of collectFrom) {
+            if (utxo.datum! == datum) {
+                tx.collectFrom([utxo], Data.to(new Constr(1, [])))
+                treasuries.set(utxo.address, (treasuries.get(utxo.address) || 0n) + utxo.assets.lovelace)
+                if (!reduce) {
+                    tx.payToContract(utxo.address, { inline: utxo.datum! }, { lovelace: this.minimumAdaAmount })
+                }
+            }
+        }
+
+        if (reduce) {
+            for (let address of treasuries.keys()) {
+                tx.payToContract(address, { inline: datum }, { lovelace: this.minimumAdaAmount })
+            }
+        }
+
+        tx = tx.attachSpendingValidator(this.treasuryScript)
+        return tx
+    }
+
+    async withdrawTreasuryRaw(utxos: OutRef[], datum: string, reduce: boolean = false): Promise<string> {
+        let tx = this.lucid.newTx()
+        tx = await this.withdrawTreasuryTx(tx, utxos, datum, reduce)
+        tx = tx.addSigner(await this.lucid.wallet.address())
+        return await this.finishTx(tx)
+    }
+
+    async withdrawTreasury(plutus: string, reduce: boolean = false): Promise<string> {
+        const treasuries = await this.getTreasuryWithdraw(plutus)
+        return await this.withdrawTreasuryRaw(treasuries.utxos, plutus, reduce)
     }
 
     getTreasury(treasuries: UTxO[], datum: string): UTxO | undefined {
