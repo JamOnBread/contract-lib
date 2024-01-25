@@ -133,7 +133,7 @@ export function encodeWantedAsset(wantedAsset: WantedAsset): Constr<Data> {
         new Constr(1, [wantedAsset.policyId])
 }
 
-function query(url: string, method: string, body: any) {
+function query(url: string, method: string, body?: any) {
 
     if (body) {
         body = JSON.stringify(body, (_, v) => typeof v === 'bigint' ? Number(v) : v)
@@ -476,9 +476,8 @@ export class JamOnBreadAdminV1 {
     }
 
     async getTreasuryUtxos(plutus: string): Promise<UtxosResponse> {
-        const url = `${this.jobApiUrl}treasury/utxos`
-        const body = { plutus }
-        const response = await query(url, 'POST', body)
+        const url = `${this.jobApiUrl}treasury/utxos/${plutus}`
+        const response = await query(url, 'GET')
 
         return await response.json() as UtxosResponse
     }

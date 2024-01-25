@@ -951,9 +951,8 @@ class JamOnBreadAdminV1 {
         return await response.json();
     }
     async getTreasuryUtxos(plutus) {
-        const url = `${this.jobApiUrl}treasury/utxos`;
-        const body = { plutus };
-        const response = await query(url, 'POST', body);
+        const url = `${this.jobApiUrl}treasury/utxos/${plutus}`;
+        const response = await query(url, 'GET');
         return await response.json();
     }
     async getTreasuryWithdraw(plutus) {
