@@ -1,5 +1,13 @@
 import { applyParamsToScript, Constr, Data, fromText } from 'lucid-cardano';
 
+var Lock;
+(function (Lock) {
+    Lock[Lock["Locked"] = 0] = "Locked";
+    Lock[Lock["Partial"] = 1] = "Partial";
+    Lock[Lock["Blocked"] = 2] = "Blocked";
+    Lock[Lock["Error"] = 3] = "Error";
+})(Lock || (Lock = {}));
+
 const plutus = {
     "preamble": {
         "title": "JamOnBread/contract",
@@ -652,9 +660,6 @@ const plutus = {
     }
 };
 
-function version() {
-    return plutus.preamble.version;
-}
 function getValidator(title) {
     for (const validator of plutus.validators) {
         if (validator.title == title) {
@@ -676,9 +681,6 @@ function applyCodeParamas(code, params) {
 }
 function getCompiledCodeParams(title, params) {
     return applyCodeParamas(getCompiledCode(title), params);
-}
-function getRewardAddress(lucid, stake) {
-    return lucid.utils.credentialToRewardAddress(lucid.utils.scriptHashToCredential(stake));
 }
 function encodeAddress(paymentPubKeyHex, stakingPubKeyHex) {
     const paymentCredential = new Constr(0, [paymentPubKeyHex]);
@@ -704,6 +706,7 @@ function encodeWantedAsset(wantedAsset) {
         new Constr(0, [new Constr(0, [wantedAsset.policyId, wantedAsset.assetName])]) :
         new Constr(1, [wantedAsset.policyId]);
 }
+
 function query(url, method, body) {
     if (body) {
         body = JSON.stringify(body, (_, v) => typeof v === 'bigint' ? Number(v) : v);
@@ -716,41 +719,6 @@ function query(url, method, body) {
         method,
         body,
     });
-}
-/**
- * Mint new unique asset
- *
- * @param lucid
- * @param name
- * @param amount
- * @returns transaction hash
- */
-async function mintUniqueAsset(lucid, name, amount) {
-    // Transform token name to hexa
-    const tokenName = fromText(name);
-    // Get first UTxO on wallet
-    const [utxo, ...rest] = await lucid.utxosAt(await lucid.wallet.address());
-    // Encode UTxO to transaction
-    const param = new Constr(0, [new Constr(0, [utxo.txHash]), BigInt(utxo.outputIndex)]);
-    // Compile code with UTxO
-    const policy = getCompiledCodeParams("assets.mint_v1", [param]);
-    // Hash script
-    const policyId = lucid.utils.mintingPolicyToId(policy);
-    // Calculate unit name
-    const unit = policyId + tokenName;
-    // Construct transaction
-    const tx = await lucid
-        .newTx()
-        .collectFrom([utxo])
-        .mintAssets({ [unit]: BigInt(amount) }, Data.void())
-        .attachMintingPolicy(policy)
-        .complete();
-    // Sign & Submit transaction
-    const signedTx = await tx.sign().complete();
-    const txHash = await signedTx.submit();
-    await lucid.awaitTx(txHash);
-    // Return transaction hash (awaited)
-    return txHash;
 }
 class JamOnBreadAdminV1 {
     static treasuryScriptTitle = "treasury.spend_v1";
@@ -877,8 +845,9 @@ class JamOnBreadAdminV1 {
         };
         return this.lucid.utils.credentialToAddress(paymentCredential, stakeCredential);
     }
-    async getEncodedAddress() {
-        const address = await this.lucid.wallet.address();
+    async getEncodedAddress(address) {
+        if (!address)
+            address = await this.lucid.wallet.address();
         const payCred = this.lucid.utils.paymentCredentialOf(address);
         try {
             const stakeCred = this.lucid.utils.stakeCredentialOf(address);
@@ -949,6 +918,55 @@ class JamOnBreadAdminV1 {
         };
         const response = await query(url, 'POST', body);
         return await response.json();
+    }
+    getAffiliates(utxo, treasuries) {
+        const paymentCred = this.lucid.utils.paymentCredentialOf(utxo.address).hash;
+        let affiliates = treasuries.map(treasury => treasury.treasury);
+        // Instant buy
+        const paymentCredInstantBuy = this.lucid.utils.validatorToScriptHash(this.instantBuyScript);
+        if (paymentCred == paymentCredInstantBuy) {
+            const datum = this.parseInstantbuyDatum(utxo.datum);
+            affiliates.push(datum.listingMarketDatum);
+            if (datum.listingAffiliateDatum) {
+                affiliates.push(datum.listingAffiliateDatum);
+            }
+            if (datum.royalty) {
+                affiliates.push(datum.royalty.treasury);
+            }
+            return affiliates;
+        }
+        // Offer
+        const paymentCredOffer = this.lucid.utils.validatorToScriptHash(this.offerScript);
+        if (paymentCred == paymentCredOffer) {
+            const datum = this.parseOfferDatum(utxo.datum);
+            affiliates.push(datum.listingMarketDatum);
+            if (datum.listingAffiliateDatum) {
+                affiliates.push(datum.listingAffiliateDatum);
+            }
+            if (datum.royalty) {
+                affiliates.push(datum.royalty.treasury);
+            }
+            return affiliates;
+        }
+        return affiliates;
+    }
+    async lockContract(unit, ...treasuries) {
+        try {
+            const utxo = await this.lucid.utxoByUnit(unit);
+            const affiliates = this.getAffiliates(utxo, treasuries);
+            const result = await this.getTreasuriesReserve(utxo, affiliates, false);
+            if (result.all) {
+                return Lock.Locked;
+            }
+            if (result.utxos.size > 0) {
+                return Lock.Partial;
+            }
+            return Lock.Blocked;
+        }
+        catch (e) {
+            console.error(e);
+            return Lock.Error;
+        }
     }
     async getTreasuryUtxos(plutus) {
         const url = `${this.jobApiUrl}treasury/utxos/${plutus}`;
@@ -1122,11 +1140,32 @@ class JamOnBreadAdminV1 {
         return await this.finishTx(txList);
     }
     async instantBuyCancelTx(tx, utxo) {
-        const toSpend = await this.lucid.utxosByOutRef([utxo]);
-        tx = tx
-            .collectFrom(toSpend, Data.to(new Constr(1, [])))
-            .attachSpendingValidator(this.instantBuyScript)
-            .addSigner(await this.lucid.wallet.address());
+        const [toSpend] = await this.lucid.utxosByOutRef([utxo]);
+        const paymentCred = this.lucid.utils.paymentCredentialOf(toSpend.address);
+        // If it is JoB Contract
+        if (paymentCred.hash == this.lucid.utils.validatorToScriptHash(this.instantBuyScript)) {
+            tx = tx.collectFrom([toSpend], Data.to(new Constr(1, [])))
+                .attachSpendingValidator(this.instantBuyScript)
+                .addSigner(await this.lucid.wallet.address());
+        }
+        // It is JPG store
+        // TODO: Value is hardcoded, fix it
+        else if (paymentCred.hash == "9068a7a3f008803edac87af1619860f2cdcde40c26987325ace138ad") {
+            // TODO: Add cache for reference
+            const reference = await this.lucid.utxosByOutRef([
+                {
+                    txHash: "9a32459bd4ef6bbafdeb8cf3b909d0e3e2ec806e4cc6268529280b0fc1d06f5b",
+                    outputIndex: 0,
+                },
+            ]);
+            tx = tx.collectFrom([toSpend], Data.void())
+                .readFrom(reference)
+                .addSigner(await this.lucid.wallet.address());
+        }
+        // unknown source, probably user's wallet
+        else {
+            tx = tx.collectFrom([toSpend]);
+        }
         return tx;
     }
     async instantBuyCancel(utxo) {
@@ -1148,7 +1187,7 @@ class JamOnBreadAdminV1 {
         txUpdate = await this.instantBuyUpdateTx(txUpdate, unit, price, listing, affiliate, royalty);
         return await this.finishTx(txUpdate);
     }
-    async instantBuyProceed(utxo, force = false, ...sellMarketPortions) {
+    async instantBuyProceedTx(tx, utxo, force = false, ...sellMarketPortions) {
         const [collectUtxo] = await this.lucid.utxosByOutRef([
             utxo
         ]);
@@ -1170,16 +1209,17 @@ class JamOnBreadAdminV1 {
                 Data.from(portion.treasury)
             ]))
         ]));
-        let buildTx = this.lucid
-            .newTx()
-            // TODO: To test big portion of assets
-            //.collectFrom(await this.lucid.wallet.getUtxos())
+        let buildTx = tx
             .collectFrom([
             collectUtxo
         ], buyRedeemer)
             .attachSpendingValidator(this.instantBuyScript);
         buildTx = buildTx.payToAddress(params.beneficier, { lovelace: params.amount + collectUtxo.assets.lovelace });
-        buildTx = await this.payToTreasuries(buildTx, utxo, payToTreasuries, force);
+        return await this.payToTreasuries(buildTx, utxo, payToTreasuries, force);
+    }
+    async instantBuyProceed(utxo, force = false, ...sellMarketPortions) {
+        let buildTx = this.lucid.newTx();
+        buildTx = await this.instantBuyProceedTx(buildTx, utxo, force, ...sellMarketPortions);
         return await this.finishTx(buildTx);
     }
     async offerListTx(tx, asset, price, listing, affiliate, royalty) {
@@ -1231,7 +1271,7 @@ class JamOnBreadAdminV1 {
         txUpdate = await this.offerUpdateTx(txUpdate, utxo, asset, price, listing, affiliate, royalty);
         return await this.finishTx(txUpdate);
     }
-    async offerProceed(utxo, unit, force = false, ...sellMarketPortions) {
+    async offerProceedTx(tx, utxo, unit, force = false, ...sellMarketPortions) {
         const [collectUtxo] = await this.lucid.utxosByOutRef([
             utxo
         ]);
@@ -1254,10 +1294,7 @@ class JamOnBreadAdminV1 {
                 Data.from(portion.treasury)
             ]))
         ]));
-        let buildTx = this.lucid
-            .newTx()
-            // TODO: To test big portion of assets
-            //.collectFrom(await this.lucid.wallet.getUtxos())
+        let buildTx = tx
             .collectFrom([
             collectUtxo
         ], buyRedeemer)
@@ -1266,7 +1303,11 @@ class JamOnBreadAdminV1 {
             lovelace: this.minimumAdaAmount,
             [unit]: 1n
         });
-        buildTx = await this.payToTreasuries(buildTx, utxo, payToTreasuries, force);
+        return await this.payToTreasuries(buildTx, utxo, payToTreasuries, force);
+    }
+    async offerProceed(utxo, unit, force = false, ...sellMarketPortions) {
+        let buildTx = this.lucid.newTx();
+        buildTx = await this.offerProceedTx(buildTx, utxo, unit, force, ...sellMarketPortions);
         return await this.finishTx(buildTx);
     }
     registerStakeTx(tx, stake) {
@@ -1318,5 +1359,5 @@ class JamOnBreadAdminV1 {
     }
 }
 
-export { JamOnBreadAdminV1, applyCodeParamas, encodeAddress, encodeRoyalty, encodeTreasuryDatumAddress, encodeTreasuryDatumTokens, encodeWantedAsset, getCompiledCode, getCompiledCodeParams, getRewardAddress, getValidator, mintUniqueAsset, version };
+export { JamOnBreadAdminV1, Lock, applyCodeParamas, encodeAddress, encodeRoyalty, encodeTreasuryDatumAddress, encodeTreasuryDatumTokens, encodeWantedAsset, getCompiledCode, getCompiledCodeParams };
 //# sourceMappingURL=contract-lib.esm.js.map

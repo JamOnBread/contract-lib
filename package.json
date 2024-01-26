@@ -1,6 +1,7 @@
 {
   "name": "job",
   "version": "1.0.6",
+  "license": "Apache-2.0",
   "type": "module",
   "description": "JoB smart contract manipulation",
   "main": "dist/contract-lib.esm.js",
@@ -30,5 +31,8 @@
     "clean": "rm -r dist/*",
     "build": "rollup -c --configPlugin typescript",
     "test": "ts-node example.ts --noemit"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/JamOnBread"
   }
 }
