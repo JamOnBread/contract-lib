@@ -249,9 +249,8 @@ export class Job {
         return affiliates
     }
 
-    public async lockContract(unit: Unit, ...treasuries: Portion[]): Promise<Lock> {
+    public async lockContractUtxo(utxo: UTxO, ...treasuries: Portion[]): Promise<Lock> {
         try {
-            const utxo = await this.lucid.utxoByUnit(unit)
             const affiliates = this.getAffiliates(utxo, treasuries)
             const result = await this.getTreasuriesReserve(utxo, affiliates, false)
 
@@ -262,6 +261,27 @@ export class Job {
             }
 
             return Lock.Blocked
+        } catch (e) {
+            console.error(e)
+            return Lock.Error
+        }
+    }
+
+    public async lockContractRef(ref: OutRef, ...treasuries: Portion[]): Promise<Lock> {
+        try {
+            const [utxo] = await this.lucid.utxosByOutRef([ref])
+            return await this.lockContractUtxo(utxo, ...treasuries)
+        }
+        catch (e) {
+            console.error(e)
+            return Lock.Error
+        }
+    }
+
+    public async lockContractUnit(unit: Unit, ...treasuries: Portion[]): Promise<Lock> {
+        try {
+            const utxo = await this.lucid.utxoByUnit(unit)
+            return await this.lockContractUtxo(utxo, ...treasuries)
 
         } catch (e) {
             console.error(e)
@@ -397,9 +417,8 @@ export class Job {
 
     public async instantBuyCancelTx(tx: Tx, utxo: UTxO | OutRef): Promise<Tx> {
         const [toSpend] = await this.lucid.utxosByOutRef([utxo])
-        const contract = await this.context.getContractByAddress(toSpend.address)
-
         try {
+            const contract = await this.context.getContractByAddress(toSpend.address)
             tx = await contract.collectTx(this.lucid, tx, toSpend, Data.to(new Constr(1, [])))
             tx = tx.addSigner(await this.lucid.wallet.address())
         } catch (e) {

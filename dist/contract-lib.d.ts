@@ -130,7 +130,9 @@ declare class Job {
     getTreasuryUtxos(plutus: string): Promise<UtxosResponse>;
     getTreasuryWithdraw(plutus: string): Promise<WithdrawResponse>;
     getAffiliates(utxo: UTxO, treasuries: Portion[]): string[];
-    lockContract(unit: Unit, ...treasuries: Portion[]): Promise<Lock>;
+    lockContractUtxo(utxo: UTxO, ...treasuries: Portion[]): Promise<Lock>;
+    lockContractRef(ref: OutRef, ...treasuries: Portion[]): Promise<Lock>;
+    lockContractUnit(unit: Unit, ...treasuries: Portion[]): Promise<Lock>;
     withdrawTreasuryTx(tx: Tx, utxos: OutRef[], datum: string, reduce?: boolean): Promise<Tx>;
     withdrawTreasuryRaw(utxos: OutRef[], datum: string, reduce?: boolean): Promise<string>;
     withdrawTreasury(plutus: string, reduce?: boolean): Promise<string>;

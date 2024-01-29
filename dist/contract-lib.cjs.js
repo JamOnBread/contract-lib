@@ -495,9 +495,8 @@ class Job {
         }
         return affiliates;
     }
-    async lockContract(unit, ...treasuries) {
+    async lockContractUtxo(utxo, ...treasuries) {
         try {
-            const utxo = await this.lucid.utxoByUnit(unit);
             const affiliates = this.getAffiliates(utxo, treasuries);
             const result = await this.getTreasuriesReserve(utxo, affiliates, false);
             if (result.all) {
@@ -507,6 +506,26 @@ class Job {
                 return exports.Lock.Partial;
             }
             return exports.Lock.Blocked;
+        }
+        catch (e) {
+            console.error(e);
+            return exports.Lock.Error;
+        }
+    }
+    async lockContractRef(ref, ...treasuries) {
+        try {
+            const [utxo] = await this.lucid.utxosByOutRef([ref]);
+            return await this.lockContractUtxo(utxo, ...treasuries);
+        }
+        catch (e) {
+            console.error(e);
+            return exports.Lock.Error;
+        }
+    }
+    async lockContractUnit(unit, ...treasuries) {
+        try {
+            const utxo = await this.lucid.utxoByUnit(unit);
+            return await this.lockContractUtxo(utxo, ...treasuries);
         }
         catch (e) {
             console.error(e);
