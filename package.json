@@ -45,5 +45,9 @@
     "test:dev": "vitest",
     "test": "vitest run",
     "prepare": "vite build"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JamOnBread/contract-lib"
   }
 }
