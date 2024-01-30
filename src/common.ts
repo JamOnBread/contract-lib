@@ -1,5 +1,5 @@
-import { Lucid, Constr, Data } from "lucid-cardano"
-import { Portion, WantedAsset } from "./types"
+import { Constr, Data, type Lucid } from "lucid-cardano"
+import type { Portion, WantedAsset } from "./definitions"
 
 export function getRewardAddress(lucid: Lucid, stake: string): string {
     return lucid.utils.credentialToRewardAddress(

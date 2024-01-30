@@ -1,6 +1,7 @@
 
-import { Data, Constr, Lucid, Network, OutRef, UTxO, Tx, paymentCredentialOf, Credential } from "lucid-cardano"
-import { Portion, WantedAsset, InstantBuyDatumV1, OfferDatumV1 } from "./types"
+import { Data, Constr, paymentCredentialOf } from "lucid-cardano"
+import type { Credential, Lucid, OutRef, Tx, UTxO } from "lucid-cardano"
+import type { Portion, WantedAsset, InstantBuyDatumV1, OfferDatumV1 } from "./definitions"
 
 export enum ContractType {
     Unknown,
@@ -13,7 +14,7 @@ export enum ContractType {
     JPG,
 }
 
-export interface Contract {
+export type Contract = {
     type: ContractType,
     active: boolean,
     hash: string,
