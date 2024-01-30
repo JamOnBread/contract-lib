@@ -1,4 +1,4 @@
-import { OutRef } from "lucid-cardano"
+import type { OutRef } from "lucid-cardano"
 
 
 export type Portion = {

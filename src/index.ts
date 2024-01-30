@@ -1,9 +1,14 @@
-import { Lucid, Script, Constr, Data, PolicyId, Unit, fromText, Tx, UTxO, OutRef, Credential, applyParamsToScript } from "lucid-cardano"
-import { Portion, WantedAsset, InstantBuyDatumV1, OfferDatumV1, SignParams, ReservationResponse, UtxosResponse, WithdrawResponse, Lock } from "./types"
-import { getCompiledCodeParams, getCompiledCode, encodeTreasuryDatumTokens, applyCodeParamas, encodeTreasuryDatumAddress, encodeAddress, encodeRoyalty, encodeWantedAsset } from "./common"
+import { Constr, Data, fromText, type Lucid, type OutRef, type Tx, type Unit, type UTxO } from "lucid-cardano"
+import type { Portion, WantedAsset, SignParams, ReservationResponse, UtxosResponse, WithdrawResponse } from "./definitions"
+import { Lock } from "./definitions"
+import { encodeTreasuryDatumTokens, encodeTreasuryDatumAddress, encodeAddress, encodeRoyalty, encodeWantedAsset } from "./common"
+import { getContext } from "./data"
+import { Context, ContractType, type Contract } from "./context"
 
-export { Portion, WantedAsset, InstantBuyDatumV1, OfferDatumV1, SignParams, ReservationResponse, UtxosResponse, WithdrawResponse, Lock } from "./types"
-export { getCompiledCodeParams, getCompiledCode, encodeTreasuryDatumTokens, applyCodeParamas, encodeTreasuryDatumAddress, encodeAddress, encodeRoyalty, encodeWantedAsset } from "./common"
+export type { Portion, WantedAsset, InstantBuyDatumV1, OfferDatumV1, SignParams, ReservationResponse, UtxosResponse, WithdrawResponse } from "./definitions"
+export { Lock } from "./definitions"
+export { encodeTreasuryDatumTokens, encodeTreasuryDatumAddress, encodeAddress, encodeRoyalty, encodeWantedAsset } from "./common"
+export { Context, ContractType, ContractBase, type Contract } from "./context"
 
 function query(url: string, method: string, body?: any) {
 
@@ -21,97 +26,25 @@ function query(url: string, method: string, body?: any) {
     })
 }
 
-export class JamOnBreadAdminV1 {
-    private static treasuryScriptTitle: string = "treasury.spend_v1"
-    private static instantBuyScriptTitle: string = "instant_buy.spend_v1"
-    private static offerScriptTitle: string = "offer.spend_v1"
-    private static stakingScriptTitle: string = "staking.withdrawal_v1"
-
+export class Job {
+    readonly context: Context
     private jobApiUrl: string
 
     readonly numberOfStakes: bigint = 10n
     readonly numberOfToken: bigint = 1n
-
-    readonly minimumAdaAmount: bigint = 2_000_000n
-    readonly minimumJobFee: bigint = 100_000n
-    readonly minimumFee = 20_000n
-
-    readonly jamTokenPolicy: string
-    readonly jamTokenName: string
-    readonly jamStakes: Map<string, Script>
-    readonly lucid: Lucid
-
-
-    readonly treasuryScript: Script
-    readonly instantBuyScript: Script
-    readonly offerScript: Script
-
     readonly treasuryDatum: string
 
-    public static getTreasuryScript(): Script {
-        return getCompiledCode(JamOnBreadAdminV1.treasuryScriptTitle)
-    }
+    readonly lucid: Lucid
 
-
-    public static getJamStakes(lucid: Lucid, policyId: PolicyId, amount: bigint, number: bigint): Map<string, Script> {
-        const stakes: Map<string, Script> = new Map()
-
-        for (let i = 1n; i <= number; i++) {
-            const code = getCompiledCodeParams(
-                JamOnBreadAdminV1.stakingScriptTitle,
-                [encodeTreasuryDatumTokens(policyId, amount), BigInt(i)]
-            )
-
-            stakes.set(lucid.utils.validatorToScriptHash(code), code)
-        }
-
-        return stakes
-    }
 
     constructor(
         lucid: Lucid,
         jobApiUrl: string,
-        jamTokenPolicy?: string,
-        jamTokenName?: string,
     ) {
         this.lucid = lucid
+        this.context = getContext(lucid)
         this.jobApiUrl = jobApiUrl
-        this.jamTokenPolicy = jamTokenPolicy || '74ce41370dd9103615c8399c51f47ecee980467ecbfcfbec5b59d09a'
-        this.jamTokenName = jamTokenName || '556e69717565'
-        this.jamStakes = JamOnBreadAdminV1.getJamStakes(
-            lucid,
-            this.jamTokenPolicy,
-            this.numberOfToken,
-            this.numberOfStakes
-        )
-
-        this.treasuryScript = JamOnBreadAdminV1.getTreasuryScript()
-        this.instantBuyScript = applyCodeParamas(
-            this.getInstantBuyScript(),
-            [
-                this.lucid.utils.validatorToScriptHash(this.treasuryScript),
-                Array.from(
-                    Array.from(this.jamStakes.keys()).map(stakeHash => new Constr(0, [new Constr(1, [stakeHash])]))
-                ),
-                this.createJobToken()
-            ]
-        )
-        this.offerScript = applyCodeParamas(
-            this.getOfferScript(),
-            [
-                this.lucid.utils.validatorToScriptHash(this.treasuryScript),
-                Array.from(
-                    Array.from(this.jamStakes.keys()).map(stakeHash => new Constr(0, [new Constr(1, [stakeHash])]))
-                ),
-                this.createJobToken()
-            ]
-        )
-
-        this.treasuryDatum = Data.to(this.createJobToken())
-    }
-
-    public createJobToken(): Data {
-        return encodeTreasuryDatumTokens(this.jamTokenPolicy, this.numberOfToken)
+        this.treasuryDatum = Data.to(encodeTreasuryDatumTokens(this.context.jobTokenPolicy, BigInt(this.context.numberOfToken)))
     }
 
     public addressToDatum(address: string): string {
@@ -125,7 +58,7 @@ export class JamOnBreadAdminV1 {
         return Data.to(datum)
     }
 
-    async sign(payload: string): Promise<SignParams> {
+    public async sign(payload: string): Promise<SignParams> {
         const address = await this.lucid.wallet.address()
         const message = await this.lucid.wallet.signMessage(address, fromText(payload))
 
@@ -137,16 +70,20 @@ export class JamOnBreadAdminV1 {
         }
     }
 
-    async payJoBToken(tx: Tx, amount: bigint): Promise<Tx> {
+    public async payJoBToken(tx: Tx, amount?: bigint): Promise<Tx> {
+        if (!amount) {
+            amount = BigInt(this.context.numberOfToken)
+        }
+
         return tx.payToAddress(
             await this.lucid.wallet.address(),
             {
-                [this.jamTokenPolicy + this.jamTokenName]: amount
+                [this.context.jobTokenPolicy + this.context.jobTokenName]: amount
             }
         )
     }
 
-    async squashNft(): Promise<OutRef> {
+    public async squashNft(): Promise<OutRef> {
         const utxos = await this.lucid.wallet.getUtxos()
         const assets: Record<string, bigint> = {
             lovelace: 0n
@@ -180,32 +117,7 @@ export class JamOnBreadAdminV1 {
         }
     }
 
-    public getInstantBuyScript(): Script {
-        return getCompiledCode(JamOnBreadAdminV1.instantBuyScriptTitle)
-    }
-
-    public getOfferScript(): Script {
-        return getCompiledCode(JamOnBreadAdminV1.offerScriptTitle)
-    }
-
-    getTreasuryAddress(stakeId?: number): string {
-        if (typeof stakeId === "undefined")
-            stakeId = stakeId || Math.round(Math.random() * this.jamStakes.size)
-
-        const paymentCredential = {
-            type: "Script",
-            hash: this.lucid.utils.validatorToScriptHash(this.treasuryScript)
-        } as Credential
-
-        const stakeCredential = {
-            type: "Script",
-            hash: Array.from(this.jamStakes.keys())[stakeId]
-        } as Credential
-
-        return this.lucid.utils.credentialToAddress(paymentCredential, stakeCredential)
-    }
-
-    async getEncodedAddress(address?: string) {
+    public async getEncodedAddress(address?: string) {
         if (!address)
             address = await this.lucid.wallet.address()
 
@@ -219,47 +131,27 @@ export class JamOnBreadAdminV1 {
         }
     }
 
-    getInstantBuyAddress(stakeId?: number): string {
-        if (typeof stakeId === "undefined")
-            stakeId = stakeId || Math.round(Math.random() * this.jamStakes.size)
-
-        const paymentCredential = {
-            type: "Script",
-            hash: this.lucid.utils.validatorToScriptHash(this.instantBuyScript)
-        } as Credential
-
-        const stakeCredential = {
-            type: "Script",
-            hash: Array.from(this.jamStakes.keys())[stakeId]
-        } as Credential
-
-        return this.lucid.utils.credentialToAddress(paymentCredential, stakeCredential)
+    public getTreasuryAddress(stakeId?: number): string {
+        return this.context.getContractAddress(this.lucid, this.context.getContract(ContractType.JobTreasury), stakeId)
     }
 
-    getOfferAddress(stakeId?: number): string {
-        if (typeof stakeId === "undefined")
-            stakeId = stakeId || Math.round(Math.random() * this.jamStakes.size)
-
-        const paymentCredential = {
-            type: "Script",
-            hash: this.lucid.utils.validatorToScriptHash(this.offerScript)
-        } as Credential
-
-        const stakeCredential = {
-            type: "Script",
-            hash: Array.from(this.jamStakes.keys())[stakeId]
-        } as Credential
-
-        return this.lucid.utils.credentialToAddress(paymentCredential, stakeCredential)
+    public getInstantBuyAddress(stakeId?: number): string {
+        return this.context.getContractAddress(this.lucid, this.context.getContract(ContractType.JobInstantBuy), stakeId)
     }
 
-    createTreasuryTx(tx: Tx, unique: number, total: number, datum: string, amount: bigint = 2_000_000n): Tx {
-        const start = Math.floor(Math.random() * this.jamStakes.size)
+    public getOfferAddress(stakeId?: number): string {
+        return this.context.getContractAddress(this.lucid, this.context.getContract(ContractType.JobOffer), stakeId)
+    }
+
+    public createTreasuryTx(tx: Tx, unique: number, total: number, datum: string, amount: bigint = 2_000_000n): Tx {
+
+        const stakeNumber = this.context.getStakeNumber()
+        const start = Math.floor(Math.random() * stakeNumber)
         const uniqueStakes: number[] = []
 
         // Set numbers to list
         for (let i = 0; i < unique; i++) {
-            uniqueStakes.push((start + i * 13) % this.jamStakes.size)
+            uniqueStakes.push((start + i * 13) % stakeNumber)
         }
 
         for (let i = 0; i < total; i++) {
@@ -273,21 +165,21 @@ export class JamOnBreadAdminV1 {
         return tx
     }
 
-    async createTreasury(unique: number, total: number, datum: string, amount: bigint = 2_000_000n): Promise<string> {
+    public async createTreasury(unique: number, total: number, datum: string, amount: bigint = 2_000_000n): Promise<string> {
         let tx = this.lucid.newTx()
         tx = this.createTreasuryTx(tx, unique, total, datum, amount)
 
         return await this.finishTx(tx)
     }
 
-    async createTreasuryAddress(address: string, unique: number, total: number, amount: bigint = 2000_000n): Promise<string> {
+    public async createTreasuryAddress(address: string, unique: number, total: number, amount: bigint = 2000_000n): Promise<string> {
         const credential = this.lucid.utils.paymentCredentialOf(address)
         const datum = encodeTreasuryDatumAddress(credential.hash)
 
         return await this.createTreasury(unique, total, Data.to(datum), amount)
     }
 
-    async createTreasuryToken(policyId: string, minTokens: bigint, unique: number, total: number, data: string, amount: bigint = 2_000_000n): Promise<string> {
+    public async createTreasuryToken(policyId: string, minTokens: bigint, unique: number, total: number, data: string, amount: bigint = 2_000_000n): Promise<string> {
         const datum = encodeTreasuryDatumTokens(policyId, minTokens)
 
         return await this.createTreasury(unique, total, Data.to(datum), amount)
@@ -305,15 +197,34 @@ export class JamOnBreadAdminV1 {
         return await response.json() as ReservationResponse
     }
 
+    public async getTreasuryUtxos(plutus: string): Promise<UtxosResponse> {
+        const url = `${this.jobApiUrl}treasury/utxos/${plutus}`
+        const response = await query(url, 'GET')
+
+        return await response.json() as UtxosResponse
+    }
+
+    public async getTreasuryWithdraw(plutus: string): Promise<WithdrawResponse> {
+        const url = `${this.jobApiUrl}treasury/withdraw`
+        const body = {
+            plutus,
+            params: await this.sign(String(Date.now()))
+        }
+        const response = await query(url, 'POST', body)
+
+        return await response.json() as WithdrawResponse
+    }
+
     public getAffiliates(utxo: UTxO, treasuries: Portion[]): string[] {
 
         const paymentCred = this.lucid.utils.paymentCredentialOf(utxo.address).hash;
         let affiliates: string[] = treasuries.map(treasury => treasury.treasury)
 
         // Instant buy
-        const paymentCredInstantBuy = this.lucid.utils.validatorToScriptHash(this.instantBuyScript)
-        if (paymentCred == paymentCredInstantBuy) {
-            const datum = this.parseInstantbuyDatum(utxo.datum!)
+        const contract = this.context.getContractByAddress(utxo.address)
+
+        if (contract.type == ContractType.JobInstantBuy) {
+            const datum = contract.parseDatum(this.lucid, utxo.datum!)
             affiliates.push(datum.listingMarketDatum)
             if (datum.listingAffiliateDatum) {
                 affiliates.push(datum.listingAffiliateDatum)
@@ -325,9 +236,8 @@ export class JamOnBreadAdminV1 {
         }
 
         // Offer
-        const paymentCredOffer = this.lucid.utils.validatorToScriptHash(this.offerScript)
-        if (paymentCred == paymentCredOffer) {
-            const datum = this.parseOfferDatum(utxo.datum!)
+        if (contract.type == ContractType.JobOffer) {
+            const datum = contract.parseDatum(this.lucid, utxo.datum!)
             affiliates.push(datum.listingMarketDatum)
             if (datum.listingAffiliateDatum) {
                 affiliates.push(datum.listingAffiliateDatum)
@@ -341,9 +251,8 @@ export class JamOnBreadAdminV1 {
         return affiliates
     }
 
-    public async lockContract(unit: Unit, ...treasuries: Portion[]): Promise<Lock> {
+    public async lockContractUtxo(utxo: UTxO, ...treasuries: Portion[]): Promise<Lock> {
         try {
-            const utxo = await this.lucid.utxoByUnit(unit)
             const affiliates = this.getAffiliates(utxo, treasuries)
             const result = await this.getTreasuriesReserve(utxo, affiliates, false)
 
@@ -354,6 +263,27 @@ export class JamOnBreadAdminV1 {
             }
 
             return Lock.Blocked
+        } catch (e) {
+            console.error(e)
+            return Lock.Error
+        }
+    }
+
+    public async lockContractRef(ref: OutRef, ...treasuries: Portion[]): Promise<Lock> {
+        try {
+            const [utxo] = await this.lucid.utxosByOutRef([ref])
+            return await this.lockContractUtxo(utxo, ...treasuries)
+        }
+        catch (e) {
+            console.error(e)
+            return Lock.Error
+        }
+    }
+
+    public async lockContractUnit(unit: Unit, ...treasuries: Portion[]): Promise<Lock> {
+        try {
+            const utxo = await this.lucid.utxoByUnit(unit)
+            return await this.lockContractUtxo(utxo, ...treasuries)
 
         } catch (e) {
             console.error(e)
@@ -361,46 +291,30 @@ export class JamOnBreadAdminV1 {
         }
     }
 
-    async getTreasuryUtxos(plutus: string): Promise<UtxosResponse> {
-        const url = `${this.jobApiUrl}treasury/utxos/${plutus}`
-        const response = await query(url, 'GET')
-
-        return await response.json() as UtxosResponse
-    }
-
-    async getTreasuryWithdraw(plutus: string): Promise<WithdrawResponse> {
-        const url = `${this.jobApiUrl}treasury/withdraw`
-        const body = {
-            plutus,
-            params: await this.sign(String(Date.now()))
-        }
-        const response = await query(url, 'POST', body)
-
-        return await response.json() as WithdrawResponse
-    }
-
-
-    async withdrawTreasuryTx(tx: Tx, utxos: OutRef[], datum: string, reduce: boolean = false): Promise<Tx> {
+    public async withdrawTreasuryTx(tx: Tx, utxos: OutRef[], datum: string, reduce: boolean = false): Promise<Tx> {
         const treasuries: Map<string, bigint> = new Map()
         const collectFrom = await this.lucid.utxosByOutRef(utxos)
 
         for (let utxo of collectFrom) {
             if (utxo.datum! == datum) {
-                tx.collectFrom([utxo], Data.to(new Constr(1, [])))
+                const contract = this.context.getContractByAddress(utxo.address)
+
+                tx = await contract.collectTx(this.lucid, tx, utxo, Data.to(new Constr(1, [])))
                 treasuries.set(utxo.address, (treasuries.get(utxo.address) || 0n) + utxo.assets.lovelace)
+
                 if (!reduce) {
-                    tx.payToContract(utxo.address, { inline: utxo.datum! }, { lovelace: this.minimumAdaAmount })
+                    tx.payToContract(utxo.address, { inline: utxo.datum! }, { lovelace: this.context.minimumAdaAmount })
                 }
             }
         }
 
         if (reduce) {
             for (let address of treasuries.keys()) {
-                tx.payToContract(address, { inline: datum }, { lovelace: this.minimumAdaAmount })
+                tx.payToContract(address, { inline: datum }, { lovelace: this.context.minimumAdaAmount })
             }
         }
 
-        tx = tx.attachSpendingValidator(this.treasuryScript)
+        // tx = tx.attachSpendingValidator(this.treasuryScript)
         return tx
     }
 
@@ -430,88 +344,12 @@ export class JamOnBreadAdminV1 {
         return undefined
     }
 
-    parseRoyalty(datum: Constr<any>): Portion | undefined {
-        if (datum.index == 0) {
-            return {
-                percent: Number(datum.fields[0].fields[0]) / 10_000,
-                treasury: Data.to(datum.fields[0].fields[1])
-            }
-        } else {
-            return undefined
-        }
-    }
-
-    parseWantedAsset(datum: Constr<any>): WantedAsset {
-        if (datum.index == 0) {
-            return {
-                policyId: datum.fields[0].fields[0],
-                assetName: datum.fields[0].fields[1]
-            }
-        } else {
-            return {
-                policyId: datum.fields[0],
-                assetName: undefined
-            }
-        }
-    }
-
-    parseBeneficier(datum: Constr<any>): string {
-        const beneficier_address = datum.fields[0].fields[0]
-        const beneficier_stake = datum.fields[1].index == 0 ?
-            datum.fields[1].fields[0].fields[0].fields[0]
-            :
-            undefined
-        const beneficier = this.lucid.utils.credentialToAddress(
-            this.lucid.utils.keyHashToCredential(beneficier_address),
-            beneficier_stake ? this.lucid.utils.keyHashToCredential(beneficier_stake) : undefined
-        )
-        return beneficier
-    }
-
-    public parseInstantbuyDatum(datumString: string): InstantBuyDatumV1 {
-        const datum: Constr<any> = Data.from(datumString)
-
-        const beneficier = this.parseBeneficier(datum.fields[0])
-        const listingMarketDatum = Data.to(datum.fields[1])
-        const listingAffiliateDatum = datum.fields[2].index == 0 ? Data.to(datum.fields[2].fields[0]) : listingMarketDatum
-        const amount = datum.fields[3]
-        const royalty = this.parseRoyalty(datum.fields[4])
-
-        return {
-            beneficier,
-            listingMarketDatum,
-            listingAffiliateDatum,
-            amount,
-            royalty
-        }
-    }
-
-    public parseOfferDatum(datumString: string): OfferDatumV1 {
-        const datum: Constr<any> = Data.from(datumString)
-
-        const beneficier = this.parseBeneficier(datum.fields[0])
-        const listingMarketDatum = Data.to(datum.fields[1]).toLowerCase()
-        const listingAffiliateDatum = (datum.fields[2].index == 0 ? Data.to(datum.fields[2].fields[0]) : listingMarketDatum).toLowerCase()
-        const amount = datum.fields[3]
-        const wantedAsset = this.parseWantedAsset(datum.fields[4])
-        const royalty = this.parseRoyalty(datum.fields[5])
-
-        return {
-            beneficier,
-            listingMarketDatum,
-            listingAffiliateDatum,
-            amount,
-            wantedAsset,
-            royalty
-        }
-    }
-
     addToTreasuries(treasuries: Map<string, bigint>, datum: string, value: bigint) {
         const prev = treasuries.get(datum) || 0n
         treasuries.set(datum, prev + value)
     }
 
-    async payToTreasuries(tx: Tx, utxo: OutRef, payToTreasuries: Map<string, bigint>, force: boolean): Promise<Tx> {
+    async payToTreasuries(tx: Tx, contract: Contract, utxo: OutRef, payToTreasuries: Map<string, bigint>, force: boolean): Promise<Tx> {
         // JoB treasury
         const treasuryRequest = await this.getTreasuriesReserve(utxo, Array.from(payToTreasuries.keys()), force)
 
@@ -525,29 +363,28 @@ export class JamOnBreadAdminV1 {
             const treasury = this.getTreasury(allTreasuries, datum)
             // Treasury exists
             if (treasury) {
-                tx = tx.collectFrom(
-                    [treasury],
-                    Data.void()
-                ).payToContract(
+                const contract = await this.context.getContractByAddress(treasury.address)
+                tx = await contract.collectTx(this.lucid, tx, treasury, Data.void())
+
+                tx = tx.payToContract(
                     treasury.address,
                     { inline: datum },
-                    { lovelace: BigInt(treasury.assets.lovelace) + BigInt(Math.max(Number(this.minimumFee), Number(payToTreasuries.get(datum)!))) }
+                    { lovelace: BigInt(treasury.assets.lovelace) + BigInt(Math.max(Number(this.context.minimumFee), Number(payToTreasuries.get(datum)!))) }
                 )
             }
             // There is no free treasury
             else {
                 tx = tx.payToContract(
-                    this.getTreasuryAddress(),
+                    this.context.getContractAddress(this.lucid, contract),
                     { inline: datum },
-                    { lovelace: BigInt(Math.max(Number(payToTreasuries.get(datum)!), Number(this.minimumAdaAmount))) }
+                    { lovelace: BigInt(Math.max(Number(payToTreasuries.get(datum)!), Number(this.context.minimumFee))) }
                 )
             }
         }
-        tx = tx.attachSpendingValidator(this.treasuryScript)
         return tx
     }
 
-    async instantBuyListTx(tx: Tx, unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx> {
+    public async instantBuyListTx(tx: Tx, unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx> {
         if (typeof listing == "undefined") {
             listing = this.treasuryDatum
         }
@@ -566,62 +403,40 @@ export class JamOnBreadAdminV1 {
             { inline: Data.to(datum) },
             {
                 [unit]: BigInt(1),
-                lovelace: this.minimumAdaAmount
+                lovelace: this.context.minimumAdaAmount
             }
         )
 
         return tx
     }
 
-    async instantbuyList(unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<string> {
+    public async instantbuyList(unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<string> {
         let txList = this.lucid.newTx()
         txList = await this.instantBuyListTx(txList, unit, price, listing, affiliate, royalty)
 
         return await this.finishTx(txList)
     }
 
-    async instantBuyCancelTx(tx: Tx, utxo: UTxO | OutRef): Promise<Tx> {
+    public async instantBuyCancelTx(tx: Tx, utxo: UTxO | OutRef): Promise<Tx> {
         const [toSpend] = await this.lucid.utxosByOutRef([utxo])
-        const paymentCred = this.lucid.utils.paymentCredentialOf(toSpend.address)
-
-        // If it is JoB Contract
-        if (paymentCred.hash == this.lucid.utils.validatorToScriptHash(this.instantBuyScript)) {
-            tx = tx.collectFrom([toSpend], Data.to(new Constr(1, [])))
-                .attachSpendingValidator(this.instantBuyScript)
-                .addSigner(await this.lucid.wallet.address())
-        }
-
-        // It is JPG store
-        // TODO: Value is hardcoded, fix it
-        else if (paymentCred.hash == "9068a7a3f008803edac87af1619860f2cdcde40c26987325ace138ad") {
-            // TODO: Add cache for reference
-            const reference = await this.lucid.utxosByOutRef([
-                {
-                    txHash:
-                        "9a32459bd4ef6bbafdeb8cf3b909d0e3e2ec806e4cc6268529280b0fc1d06f5b",
-                    outputIndex: 0,
-                },
-            ]);
-
-            tx = tx.collectFrom([toSpend], Data.void())
-                .readFrom(reference)
-                .addSigner(await this.lucid.wallet.address())
-        }
-        // unknown source, probably user's wallet
-        else {
+        try {
+            const contract = await this.context.getContractByAddress(toSpend.address)
+            tx = await contract.collectTx(this.lucid, tx, toSpend, Data.to(new Constr(1, [])))
+            tx = tx.addSigner(await this.lucid.wallet.address())
+        } catch (e) {
             tx = tx.collectFrom([toSpend])
         }
 
         return tx
     }
 
-    async instantBuyCancel(utxo: OutRef): Promise<string> {
+    public async instantBuyCancel(utxo: OutRef): Promise<string> {
         let txCancel = this.lucid.newTx()
         txCancel = await this.instantBuyCancelTx(txCancel, utxo)
         return await this.finishTx(txCancel)
     }
 
-    async instantBuyUpdateTx(tx: Tx, unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx> {
+    public async instantBuyUpdateTx(tx: Tx, unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx> {
         const toSpend = await this.lucid.utxoByUnit(unit)
         tx = await this.instantBuyCancelTx(tx, {
             txHash: toSpend.txHash,
@@ -631,22 +446,22 @@ export class JamOnBreadAdminV1 {
         return tx
     }
 
-    async instantBuyUpdate(unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<string> {
+    public async instantBuyUpdate(unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<string> {
         let txUpdate = this.lucid.newTx()
         txUpdate = await this.instantBuyUpdateTx(txUpdate, unit, price, listing, affiliate, royalty)
         return await this.finishTx(txUpdate)
     }
 
-    async instantBuyProceedTx(tx: Tx, utxo: OutRef, force: boolean = false, ...sellMarketPortions: Portion[]): Promise<Tx> {
+    public async instantBuyProceedTx(tx: Tx, utxo: OutRef, force: boolean = false, ...sellMarketPortions: Portion[]): Promise<Tx> {
 
         const [collectUtxo] = await this.lucid.utxosByOutRef([
             utxo
         ])
-
-        const params = this.parseInstantbuyDatum(collectUtxo.datum!)
+        const contract = await this.context.getContractByAddress(collectUtxo.address)
+        const params = contract.parseDatum(this.lucid, collectUtxo.datum!)
         const provision = 0.025 * Number(params.amount)
         const payToTreasuries = new Map<string, bigint>()
-        payToTreasuries.set(this.treasuryDatum, BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.minimumJobFee))))
+        payToTreasuries.set(this.treasuryDatum, BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.context.minimumJobFee))))
 
         this.addToTreasuries(payToTreasuries, params.listingMarketDatum, BigInt(Math.ceil(Number(provision) * 0.2)))
         this.addToTreasuries(payToTreasuries, params.listingAffiliateDatum, BigInt(Math.ceil(Number(provision) * 0.2)))
@@ -656,7 +471,7 @@ export class JamOnBreadAdminV1 {
                 payToTreasuries,
                 portion.treasury.toLowerCase(),
                 BigInt(
-                    Math.max(Math.ceil(Number(provision) * 0.5 * portion.percent), Number(this.minimumFee))
+                    Math.max(Math.ceil(Number(provision) * 0.5 * portion.percent), Number(this.context.minimumFee))
                 )
             )
         }
@@ -675,29 +490,21 @@ export class JamOnBreadAdminV1 {
                 ), // selling marketplace
             )]))
 
-        let buildTx = tx
-            .collectFrom(
-                [
-                    collectUtxo
-                ],
-                buyRedeemer
-            )
-            .attachSpendingValidator(this.instantBuyScript)
-
+        let buildTx = await contract.collectTx(this.lucid, tx, collectUtxo, buyRedeemer)
         buildTx = buildTx.payToAddress(
             params.beneficier,
             { lovelace: params.amount + collectUtxo.assets.lovelace }
         )
-        return await this.payToTreasuries(buildTx, utxo, payToTreasuries, force)
+        return await this.payToTreasuries(buildTx, contract.treasury!, utxo, payToTreasuries, force)
     }
 
-    async instantBuyProceed(utxo: OutRef, force: boolean = false, ...sellMarketPortions: Portion[]): Promise<string> {
+    public async instantBuyProceed(utxo: OutRef, force: boolean = false, ...sellMarketPortions: Portion[]): Promise<string> {
         let buildTx = this.lucid.newTx()
         buildTx = await this.instantBuyProceedTx(buildTx, utxo, force, ...sellMarketPortions)
         return await this.finishTx(buildTx)
     }
 
-    async offerListTx(tx: Tx, asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx> {
+    public async offerListTx(tx: Tx, asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx> {
         if (typeof listing == "undefined") {
             listing = this.treasuryDatum
         }
@@ -716,14 +523,14 @@ export class JamOnBreadAdminV1 {
             this.getOfferAddress(),
             { inline: Data.to(datum) },
             {
-                lovelace: this.minimumAdaAmount + price
+                lovelace: this.context.minimumAdaAmount + price
             }
         )
 
         return tx
     }
 
-    async offerList(asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion) {
+    public async offerList(asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion) {
         let txList = this.lucid.newTx()
         txList = await this.offerListTx(txList, asset, price, listing, affiliate, royalty)
 
@@ -733,45 +540,44 @@ export class JamOnBreadAdminV1 {
         }
     }
 
-    async offerCancelTx(tx: Tx, utxo: UTxO | OutRef): Promise<Tx> {
-        const toSpend = await this.lucid.utxosByOutRef([utxo])
-        tx = tx
-            .collectFrom(toSpend, Data.to(new Constr(1, [])))
-            .attachSpendingValidator(this.offerScript)
-            .addSigner(await this.lucid.wallet.address())
-        return tx
+    public async offerCancelTx(tx: Tx, utxo: UTxO | OutRef): Promise<Tx> {
+        const [toSpend] = await this.lucid.utxosByOutRef([utxo])
+        const contract = await this.context.getContractByAddress(toSpend.address)
+        tx = await contract.collectTx(this.lucid, tx, toSpend, Data.to(new Constr(1, [])))
+        return tx.addSigner(await this.lucid.wallet.address())
     }
 
-    async offerCancel(utxo: OutRef): Promise<string> {
+    public async offerCancel(utxo: OutRef): Promise<string> {
         let txCancel = this.lucid.newTx()
         txCancel = await this.offerCancelTx(txCancel, utxo)
         return await this.finishTx(txCancel)
     }
 
-    async offerUpdateTx(tx: Tx, utxo: UTxO | OutRef, asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx> {
+    public async offerUpdateTx(tx: Tx, utxo: UTxO | OutRef, asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx> {
         tx = await this.offerCancelTx(tx, utxo)
         tx = await this.offerListTx(tx, asset, price, listing, affiliate, royalty)
         return tx
     }
 
-    async offerUpdate(utxo: UTxO | OutRef, asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<string> {
+    public async offerUpdate(utxo: UTxO | OutRef, asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<string> {
         let txUpdate = this.lucid.newTx()
         txUpdate = await this.offerUpdateTx(txUpdate, utxo, asset, price, listing, affiliate, royalty)
         return await this.finishTx(txUpdate)
     }
 
-    async offerProceedTx(tx: Tx, utxo: OutRef, unit: Unit, force: boolean = false, ...sellMarketPortions: Portion[]): Promise<Tx> {
+    public async offerProceedTx(tx: Tx, utxo: OutRef, unit: Unit, force: boolean = false, ...sellMarketPortions: Portion[]): Promise<Tx> {
 
         const [collectUtxo] = await this.lucid.utxosByOutRef([
             utxo
         ])
 
-        const params = this.parseOfferDatum(collectUtxo.datum!)
+        const contract = await this.context.getContractByAddress(collectUtxo.address)
+        const params = contract.parseDatum(this.lucid, collectUtxo.datum!)
         const provision = 0.025 * Number(params.amount)
 
         console.debug("Offer", params)
         const payToTreasuries = new Map<string, bigint>()
-        payToTreasuries.set(this.treasuryDatum, BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.minimumJobFee))))
+        payToTreasuries.set(this.treasuryDatum, BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.context.minimumJobFee))))
 
         this.addToTreasuries(payToTreasuries, params.listingMarketDatum.toLocaleLowerCase(), BigInt(Math.ceil(Number(provision) * 0.2)))
         this.addToTreasuries(payToTreasuries, params.listingAffiliateDatum.toLowerCase(), BigInt(Math.ceil(Number(provision) * 0.2)))
@@ -794,38 +600,29 @@ export class JamOnBreadAdminV1 {
                 ), // selling marketplace
             )]))
 
-        let buildTx = tx
-            .collectFrom(
-                [
-                    collectUtxo
-                ],
-                buyRedeemer
-            )
-            .attachSpendingValidator(this.offerScript)
-
-
+        let buildTx = await contract.collectTx(this.lucid, tx, collectUtxo, buyRedeemer)
         buildTx = buildTx.payToAddress(
             params.beneficier,
             {
-                lovelace: this.minimumAdaAmount,
+                lovelace: this.context.minimumAdaAmount,
                 [unit]: 1n
             }
         )
-        return await this.payToTreasuries(buildTx, utxo, payToTreasuries, force)
+        return await this.payToTreasuries(buildTx, contract.treasury!, utxo, payToTreasuries, force)
     }
 
-    async offerProceed(utxo: OutRef, unit: Unit, force: boolean = false, ...sellMarketPortions: Portion[]): Promise<string> {
+    public async offerProceed(utxo: OutRef, unit: Unit, force: boolean = false, ...sellMarketPortions: Portion[]): Promise<string> {
         let buildTx = this.lucid.newTx()
         buildTx = await this.offerProceedTx(buildTx, utxo, unit, force, ...sellMarketPortions)
         return await this.finishTx(buildTx)
     }
 
-    registerStakeTx(tx: Tx, stake: string): Tx {
+    public registerStakeTx(tx: Tx, stake: string): Tx {
         let newTx = tx.registerStake(stake)
         return newTx
     }
 
-    async registerStakes(stakes: string[]): Promise<string> {
+    public async registerStakes(stakes: string[]): Promise<string> {
         let newTx = this.lucid.newTx()
         for (let stake of stakes) {
             newTx = newTx.registerStake(stake)
@@ -834,44 +631,44 @@ export class JamOnBreadAdminV1 {
         return await this.finishTx(newTx)
     }
 
-    delegateTx(tx: Tx, stake: string, poolId: string): Tx {
+    public delegateTx(tx: Tx, stake: string, poolId: string): Tx {
         const credential = this.lucid.utils.scriptHashToCredential(stake)
         const rewardAddress = this.lucid.utils.credentialToRewardAddress(credential)
         let newTx = tx.delegateTo(rewardAddress, poolId, Data.void())
         return newTx
     }
 
-    async delegate(stake: string, poolId: string): Promise<string> {
+    public async delegate(stake: string, poolId: string): Promise<string> {
         let newTx = this.lucid.newTx()
         newTx = this.delegateTx(newTx, stake, poolId)
         newTx = await this.addJobTokens(newTx)
-        newTx = newTx.attachWithdrawalValidator(this.jamStakes.get(stake)!)
+        newTx = await this.context.getContractByHash(stake).attachTx(this.lucid, newTx)
         return await this.finishTx(newTx)
     }
 
-    withdrawTx(tx: Tx, stake: string, amount: bigint): Tx {
+    public withdrawTx(tx: Tx, stake: string, amount: bigint): Tx {
         const credential = this.lucid.utils.scriptHashToCredential(stake)
         const rewardAddress = this.lucid.utils.credentialToRewardAddress(credential)
         let newTx = tx.withdraw(rewardAddress, amount, Data.void())
         return newTx
     }
 
-    async withdraw(stake: string, amount: bigint): Promise<string> {
+    public async withdraw(stake: string, amount: bigint): Promise<string> {
         let newTx = this.lucid.newTx()
         newTx = this.withdrawTx(newTx, stake, amount)
         newTx = await this.addJobTokens(newTx)
-        newTx = newTx.attachWithdrawalValidator(this.jamStakes.get(stake)!)
+        newTx = await this.context.getContractByHash(stake).attachTx(this.lucid, newTx)
         return await this.finishTx(newTx)
     }
 
-    async addJobTokens(tx: Tx): Promise<Tx> {
+    public async addJobTokens(tx: Tx): Promise<Tx> {
         return tx.payToAddress(
             await this.lucid.wallet.address(),
-            { [this.jamTokenPolicy + this.jamTokenName]: this.numberOfToken }
+            { [this.context.jobTokenPolicy + this.context.jobTokenName]: this.numberOfToken }
         )
     }
 
-    async finishTx(tx: Tx): Promise<string> {
+    public async finishTx(tx: Tx): Promise<string> {
         const txComplete = await tx.complete()
         const signedTx = await txComplete.sign().complete()
         const txHash = await signedTx.submit()
