@@ -1,36 +1,44 @@
 {
   "name": "job",
+  "description": "JoB smart contract manipulation",
   "version": "1.1.1",
   "license": "Apache-2.0",
   "type": "module",
-  "description": "JoB smart contract manipulation",
-  "main": "dist/contract-lib.esm.js",
-  "types": "dist/contract-lib.d.ts",
-  "module": "dist/contract-lib.esm.js",
+  "engines": {
+    "node": ">=18.15.0"
+  },
   "files": [
-    "/dist"
+    "./dist",
+    "./src"
   ],
+  "exports": {
+    ".": {
+      "types": "./dist/contract-lib.d.ts",
+      "require": "./dist/contract-lib.cjs",
+      "default": "./dist/contract-lib.js"
+    }
+  },
+  "typesVersions": {
+    ">=5": {
+      "index": [
+        "./dist/contract-lib.d.ts"
+      ]
+    }
+  },
   "dependencies": {
     "lucid-cardano": "^0.10.7"
   },
   "devDependencies": {
-    "@rollup/plugin-typescript": "^11.1.5",
-    "@types/chai": "^4.3.5",
-    "@types/mocha": "^10.0.1",
-    "@types/node": "^20.4.4",
-    "chai": "^4.3.7",
-    "dts": "^0.1.1",
-    "mocha": "^10.2.0",
-    "npm-run-all": "^4.1.5",
-    "rollup": "^4.1.4",
-    "rollup-plugin-dts": "^6.1.0",
-    "ts-node": "^10.9.1",
-    "typescript": "^5.1.6"
+    "@types/node": "~18.15.0",
+    "typescript": "^5.1.6",
+    "vite": "^5.0.12",
+    "vite-plugin-dts": "^3.7.2",
+    "vite-tsconfig-paths": "^4.3.1"
   },
   "scripts": {
     "clean": "rm -r dist/*",
-    "build": "rollup -c --configPlugin typescript",
-    "test": "ts-node example.ts --noemit"
+    "build": "vite build",
+    "prepare": "vite build"
   },
   "publishConfig": {
     "registry": "https://npm.pkg.github.com/JamOnBread"
