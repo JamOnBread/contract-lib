@@ -1,5 +1,5 @@
 import { Lucid } from "lucid-cardano"
-import { JobContract, JobContractInstantBuy, JobContractOffer, JpgContract, Context, ContractType } from "./context"
+import { Context, ContractType, JobContract, JobContractInstantBuy, JobContractOffer } from "./context"
 
 
 export function getContextPreview(): Context {

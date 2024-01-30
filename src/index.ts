@@ -1,12 +1,14 @@
-import { Lucid, Script, Constr, Data, PolicyId, Unit, fromText, Tx, UTxO, OutRef, Credential, applyParamsToScript } from "lucid-cardano"
-import { Portion, WantedAsset, InstantBuyDatumV1, OfferDatumV1, SignParams, ReservationResponse, UtxosResponse, WithdrawResponse, Lock } from "./types"
+import { Constr, Data, fromText, type Lucid, type OutRef, type Tx, type Unit, type UTxO } from "lucid-cardano"
+import type { Portion, WantedAsset, SignParams, ReservationResponse, UtxosResponse, WithdrawResponse } from "./definitions"
+import { Lock } from "./definitions"
 import { encodeTreasuryDatumTokens, encodeTreasuryDatumAddress, encodeAddress, encodeRoyalty, encodeWantedAsset } from "./common"
 import { getContext } from "./data"
-import { Context, ContractType, Contract, ContractBase } from "./context"
+import { Context, ContractType, type Contract } from "./context"
 
-export { Portion, WantedAsset, InstantBuyDatumV1, OfferDatumV1, SignParams, ReservationResponse, UtxosResponse, WithdrawResponse, Lock } from "./types"
+export type { Portion, WantedAsset, InstantBuyDatumV1, OfferDatumV1, SignParams, ReservationResponse, UtxosResponse, WithdrawResponse } from "./definitions"
+export { Lock } from "./definitions"
 export { encodeTreasuryDatumTokens, encodeTreasuryDatumAddress, encodeAddress, encodeRoyalty, encodeWantedAsset } from "./common"
-export { Context, ContractType, Contract, ContractBase } from "./context"
+export { Context, ContractType, ContractBase, type Contract } from "./context"
 
 function query(url: string, method: string, body?: any) {
 
