@@ -26,7 +26,8 @@
     }
   },
   "dependencies": {
-    "lucid-cardano": "^0.10.7"
+    "lucid-cardano": "^0.10.7",
+    "tsx": "^4.7.0"
   },
   "devDependencies": {
     "@types/node": "~18.15.0",
