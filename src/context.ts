@@ -83,6 +83,7 @@ export class ContractBase implements Contract {
 
 export class Context {
 
+    readonly jobApiUrl: string
     readonly jobTokenPolicy: string
     readonly jobTokenName: string
     readonly numberOfToken: number
@@ -94,11 +95,13 @@ export class Context {
     readonly stakes: string[]
 
     constructor(
+        jobApiUrl: string,
         jobTokenPolicy: string,
         jobTokenName: string,
         numberOfToken: number,
         contracts: Contract[],
         stakes: string[]) {
+        this.jobApiUrl = jobApiUrl
 
         this.jobTokenPolicy = jobTokenPolicy
         this.jobTokenName = jobTokenName

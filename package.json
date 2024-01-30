@@ -1,7 +1,7 @@
 {
-  "name": "job",
+  "name": "@jamonbread/sdk",
   "description": "JoB smart contract manipulation",
-  "version": "1.1.1",
+  "version": "1.0.0",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
@@ -13,15 +13,15 @@
   ],
   "exports": {
     ".": {
-      "types": "./dist/contract-lib.d.ts",
-      "require": "./dist/contract-lib.cjs",
-      "default": "./dist/contract-lib.js"
+      "types": "./dist/sdk.d.ts",
+      "require": "./dist/sdk.cjs",
+      "default": "./dist/sdk.js"
     }
   },
   "typesVersions": {
     ">=5": {
       "index": [
-        "./dist/contract-lib.d.ts"
+        "./dist/sdk.d.ts"
       ]
     }
   },
@@ -45,8 +45,5 @@
     "test:dev": "vitest",
     "test": "vitest run",
     "prepare": "vite build"
-  },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com/JamOnBread"
   }
 }

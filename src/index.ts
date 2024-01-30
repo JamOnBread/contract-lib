@@ -26,12 +26,10 @@ function query(url: string, method: string, body?: any) {
     })
 }
 
-export class Job {
+export class JobCardano {
     readonly context: Context
     private jobApiUrl: string
 
-    readonly numberOfStakes: bigint = 10n
-    readonly numberOfToken: bigint = 1n
     readonly treasuryDatum: string
 
     readonly lucid: Lucid
@@ -39,11 +37,13 @@ export class Job {
 
     constructor(
         lucid: Lucid,
-        jobApiUrl: string,
+        jobApiUrl?: string,
+        context?: Context,
     ) {
         this.lucid = lucid
-        this.context = getContext(lucid)
-        this.jobApiUrl = jobApiUrl
+        this.context = context ? context : getContext(lucid)
+        this.jobApiUrl = jobApiUrl ? jobApiUrl : this.context.jobApiUrl
+
         this.treasuryDatum = Data.to(encodeTreasuryDatumTokens(this.context.jobTokenPolicy, BigInt(this.context.numberOfToken)))
     }
 
@@ -664,7 +664,7 @@ export class Job {
     public async addJobTokens(tx: Tx): Promise<Tx> {
         return tx.payToAddress(
             await this.lucid.wallet.address(),
-            { [this.context.jobTokenPolicy + this.context.jobTokenName]: this.numberOfToken }
+            { [this.context.jobTokenPolicy + this.context.jobTokenName]: BigInt(this.context.numberOfToken) }
         )
     }
 

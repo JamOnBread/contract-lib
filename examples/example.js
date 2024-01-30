@@ -1,6 +1,4 @@
-#!/usr/bin/env node --loader tsx
-
-import { JobCardano } from "@jamonbread/sdk"
+import {JobCardano} from "@jamonbread/sdk"
 import { Lucid } from "lucid-cardano"
 
 const lucid = await Lucid.new(undefined, "Preprod")
