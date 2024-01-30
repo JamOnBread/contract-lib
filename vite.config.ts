@@ -25,4 +25,14 @@ export default defineConfig(({ mode }) => ({
     minify: true
   },
   plugins: [tsconfigPaths(), dts()],
+  define: {
+    'import.meta.vitest': 'undefined',
+  },
+  test: {
+    includeSource: ['src/**/*.{js,ts}'],
+    coverage: {
+      enabled: true,
+      reporter: ['html', 'json', 'text'],
+    },
+  },
 }))
