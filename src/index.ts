@@ -216,8 +216,6 @@ export class JobCardano {
     }
 
     public getAffiliates(utxo: UTxO, treasuries: Portion[]): string[] {
-
-        const paymentCred = this.lucid.utils.paymentCredentialOf(utxo.address).hash;
         let affiliates: string[] = treasuries.map(treasury => treasury.treasury)
 
         // Instant buy
@@ -377,7 +375,7 @@ export class JobCardano {
                 tx = tx.payToContract(
                     this.context.getContractAddress(this.lucid, contract),
                     { inline: datum },
-                    { lovelace: BigInt(Math.max(Number(payToTreasuries.get(datum)!), Number(this.context.minimumFee))) }
+                    { lovelace: BigInt(Math.max(Number(payToTreasuries.get(datum)!), Number(this.context.minimumAdaAmount))) }
                 )
             }
         }
@@ -530,14 +528,11 @@ export class JobCardano {
         return tx
     }
 
-    public async offerList(asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion) {
+    public async offerList(asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<string> {
         let txList = this.lucid.newTx()
         txList = await this.offerListTx(txList, asset, price, listing, affiliate, royalty)
 
-        return {
-            txHash: await this.finishTx(txList),
-            outputIndex: 0
-        }
+        return this.finishTx(txList)
     }
 
     public async offerCancelTx(tx: Tx, utxo: UTxO | OutRef): Promise<Tx> {
