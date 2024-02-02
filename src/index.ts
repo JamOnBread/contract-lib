@@ -31,6 +31,7 @@ export class JobCardano {
     private jobApiUrl: string
 
     readonly treasuryDatum: string
+    public signParams?: SignParams
 
     readonly lucid: Lucid
 
@@ -47,6 +48,10 @@ export class JobCardano {
         this.treasuryDatum = Data.to(encodeTreasuryDatumTokens(this.context.jobTokenPolicy, BigInt(this.context.numberOfToken)))
     }
 
+    public setSignParams(signParams: SignParams) {
+        this.signParams = signParams
+    }
+
     public addressToDatum(address: string): string {
         const credential = this.lucid.utils.paymentCredentialOf(address)
         const datum = encodeTreasuryDatumAddress(credential.hash)
@@ -58,7 +63,8 @@ export class JobCardano {
         return Data.to(datum)
     }
 
-    public async sign(payload: string): Promise<SignParams> {
+    public async sign(payload?: string): Promise<SignParams> {
+        payload = payload || String(Date.now())
         const address = await this.lucid.wallet.address()
         const message = await this.lucid.wallet.signMessage(address, fromText(payload))
 
@@ -204,11 +210,11 @@ export class JobCardano {
         return await response.json() as UtxosResponse
     }
 
-    public async getTreasuryWithdraw(plutus: string): Promise<WithdrawResponse> {
+    public async getTreasuryWithdraw(plutus: string, signParams?: SignParams): Promise<WithdrawResponse> {
         const url = `${this.jobApiUrl}treasury/withdraw`
         const body = {
             plutus,
-            params: await this.sign(String(Date.now()))
+            params: signParams || this.signParams || await this.sign()
         }
         const response = await query(url, 'POST', body)
 
@@ -311,8 +317,6 @@ export class JobCardano {
                 tx.payToContract(address, { inline: datum }, { lovelace: this.context.minimumAdaAmount })
             }
         }
-
-        // tx = tx.attachSpendingValidator(this.treasuryScript)
         return tx
     }
 
@@ -323,8 +327,8 @@ export class JobCardano {
         return await this.finishTx(tx)
     }
 
-    async withdrawTreasury(plutus: string, reduce: boolean = false): Promise<string> {
-        const treasuries = await this.getTreasuryWithdraw(plutus)
+    async withdrawTreasury(plutus: string, reduce: boolean = false, signParams?: SignParams): Promise<string> {
+        const treasuries = await this.getTreasuryWithdraw(plutus, signParams)
         return await this.withdrawTreasuryRaw(treasuries.utxos, plutus, reduce)
     }
 
@@ -491,7 +495,7 @@ export class JobCardano {
         let buildTx = await contract.collectTx(this.lucid, tx, collectUtxo, buyRedeemer)
         buildTx = buildTx.payToAddress(
             params.beneficier,
-            { lovelace: params.amount + collectUtxo.assets.lovelace }
+            { lovelace: params.amount - provision + collectUtxo.assets.lovelace }
         )
         return await this.payToTreasuries(buildTx, contract.treasury!, utxo, payToTreasuries, force)
     }
