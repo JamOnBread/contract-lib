@@ -1,7 +1,7 @@
 {
   "name": "@jamonbread/sdk",
   "description": "JoB smart contract manipulation",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "license": "Apache-2.0",
   "type": "module",
   "engines": {
@@ -50,6 +50,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/JamOnBread/contract-lib"
+    "url": "git+https://github.com/JamOnBread/contract-lib.git"
   }
 }

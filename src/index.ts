@@ -495,7 +495,7 @@ export class JobCardano {
         let buildTx = await contract.collectTx(this.lucid, tx, collectUtxo, buyRedeemer)
         buildTx = buildTx.payToAddress(
             params.beneficier,
-            { lovelace: params.amount - provision + collectUtxo.assets.lovelace }
+            { lovelace: params.amount - BigInt(provision) + collectUtxo.assets.lovelace }
         )
         return await this.payToTreasuries(buildTx, contract.treasury!, utxo, payToTreasuries, force)
     }
