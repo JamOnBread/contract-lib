@@ -2,10 +2,6 @@ import { Lucid } from "lucid-cardano"
 import { Context, ContractType, JobContract, JobContractInstantBuy, JobContractOffer } from "./context"
 
 
-export function getContextPreview(): Context {
-    throw new Error("Un implemented")
-}
-
 export function getContextPreprod(): Context {
     const treasury = new JobContract(
         ContractType.JobTreasury,
@@ -176,6 +172,10 @@ export function getContextPreprod(): Context {
 }
 
 export function getContextMainnet(): Context {
+    return getContextPreprod()
+}
+
+export function getContextPreview(): Context {
     throw new Error("Un implemented")
 }
 
