@@ -11,7 +11,7 @@ const job = new JobCardano(lucid)
 const unit = policyId + assetName;
 const affiliateString =
 const listingTxHash = await job.instantbuyList(policyId + assetName, 10_000_000n)
-const buyTxHash = await job.instantBuyCancel(await lucid.utxoByUnit(unit))
+const cancelTxHash = await job.instantBuyCancel(await lucid.utxoByUnit(unit))
 const proceedTxHash = await job.instantBuyProceed(await lucid.utxoByUnit(unit), false)
 
 // Treasury interaction
