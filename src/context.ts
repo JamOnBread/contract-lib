@@ -107,7 +107,7 @@ export class Context {
     readonly numberOfToken: number
     readonly minimumAdaAmount: bigint = 2_000_000n
     readonly minimumJobFee: bigint = 100_000n
-    readonly minimumFee = 20_000n
+    readonly minimumFee = 20_001n
 
     readonly contracts: Contract[]
     readonly stakes: string[]
