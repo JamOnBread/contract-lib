@@ -28,6 +28,7 @@ export type { Portion, WantedAsset, InstantBuyDatumV1, OfferDatumV1, SignParams,
 export { Lock } from "./definitions"
 export { encodeTreasuryDatumTokens, encodeTreasuryDatumAddress, encodeAddress, encodeRoyalty, encodeWantedAsset } from "./common"
 export { Context, ContractType, ContractBase, type Contract } from "./context"
+export { JamOnBreadProvider } from "./provider";
 
 function query(url: string, method: string, body?: any) {
 
@@ -372,12 +373,14 @@ export class JobCardano {
 
     async payToTreasuries(tx: Tx, contract: Contract, utxo: OutRef, payToTreasuries: Map<string, bigint>, force: boolean): Promise<Tx> {
         // JoB treasury
+        console.log(payToTreasuries)
         const treasuryRequest = await this.getTreasuriesReserve(utxo, Array.from(payToTreasuries.keys()), force)
 
         if (!treasuryRequest.all && !force) {
             throw new Error('Treasuries are not avaible')
         }
         const allTreasuries = await this.lucid.utxosByOutRef(Object.values(treasuryRequest.utxos))
+        console.log(allTreasuries)
 
         // Pay to treasuries
         for (let [datum, _] of payToTreasuries) {
@@ -687,6 +690,7 @@ export class JobCardano {
     }
 
     public async finishTx(tx: Tx): Promise<string> {
+
         const txComplete = await tx.complete()
         const signedTx = await txComplete.sign().complete()
         const txHash = await signedTx.submit()
