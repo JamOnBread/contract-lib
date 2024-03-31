@@ -47,6 +47,11 @@ export type OfferDatumV1 = {
     royalty: Portion | undefined
 }
 
+export type JpgDatum = {
+    address: string,
+    payouts: Record<string, bigint>
+}
+
 export type SignParams = {
     address: string,
     secret: string,

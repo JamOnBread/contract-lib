@@ -17,14 +17,14 @@ specific language governing permissions and limitations
 under the License.
 */
 
-import { Constr, Data, fromText, type Lucid, type OutRef, type Tx, type Unit, type UTxO } from "lucid-cardano"
-import type { Portion, WantedAsset, SignParams, ReservationResponse, UtxosResponse, WithdrawResponse } from "./definitions"
+import { Constr, C, Data, fromText, fromHex, toHex, type Lucid, type OutRef, type Tx, type Unit, type UTxO } from "lucid-cardano"
+import type { Portion, WantedAsset, SignParams, ReservationResponse, UtxosResponse, WithdrawResponse, JpgDatum, } from "./definitions"
 import { Lock } from "./definitions"
 import { encodeTreasuryDatumTokens, encodeTreasuryDatumAddress, encodeAddress, encodeRoyalty, encodeWantedAsset } from "./common"
 import { getContext } from "./data"
 import { Context, ContractType, type Contract } from "./context"
 
-export type { Portion, WantedAsset, InstantBuyDatumV1, OfferDatumV1, SignParams, ReservationResponse, UtxosResponse, WithdrawResponse } from "./definitions"
+export type { Portion, WantedAsset, InstantBuyDatumV1, OfferDatumV1, JpgDatum, SignParams, ReservationResponse, UtxosResponse, WithdrawResponse } from "./definitions"
 export { Lock } from "./definitions"
 export { encodeTreasuryDatumTokens, encodeTreasuryDatumAddress, encodeAddress, encodeRoyalty, encodeWantedAsset } from "./common"
 export { Context, ContractType, ContractBase, type Contract } from "./context"
@@ -445,7 +445,12 @@ export class JobCardano {
         const [toSpend] = await this.lucid.utxosByOutRef([utxo])
         try {
             const contract = await this.context.getContractByAddress(toSpend.address)
-            tx = await contract.collectTx(this.lucid, tx, toSpend, Data.to(new Constr(1, [])))
+            switch (contract.type) {
+                case ContractType.JPG:
+                    tx = await contract.collectTx(this.lucid, tx, toSpend, Data.to(new Constr(0, [])))
+                default:
+                    tx = await contract.collectTx(this.lucid, tx, toSpend, Data.to(new Constr(1, [])))
+            }
             tx = tx.addSigner(await this.lucid.wallet.address())
         } catch (e) {
             tx = tx.collectFrom([toSpend])
@@ -477,52 +482,88 @@ export class JobCardano {
     }
 
     public async instantBuyProceedTx(tx: Tx, utxo: OutRef, force: boolean = false, ...sellMarketPortions: Portion[]): Promise<Tx> {
-
+        console.log("Instant buy proceed")
         const [collectUtxo] = await this.lucid.utxosByOutRef([
             utxo
         ])
         const contract = await this.context.getContractByAddress(collectUtxo.address)
-        const params = contract.parseDatum(this.lucid, collectUtxo.datum!)
-        const provision = 0.025 * Number(params.amount)
-        const payToTreasuries = new Map<string, bigint>()
-        payToTreasuries.set(this.treasuryDatum, BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.context.minimumJobFee))))
+        console.log(collectUtxo.address)
 
-        this.addToTreasuries(payToTreasuries, params.listingMarketDatum, BigInt(Math.ceil(Number(provision) * 0.2)))
-        this.addToTreasuries(payToTreasuries, params.listingAffiliateDatum, BigInt(Math.ceil(Number(provision) * 0.2)))
+        switch (contract.type) {
+            case ContractType.JobInstantBuy:
+                const jamParams = contract.parseDatum(this.lucid, collectUtxo.datum!)
+                const provision = 0.025 * Number(jamParams.amount)
+                const payToTreasuries = new Map<string, bigint>()
+                payToTreasuries.set(this.treasuryDatum, BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.context.minimumJobFee))))
 
-        for (let portion of sellMarketPortions) {
-            this.addToTreasuries(
-                payToTreasuries,
-                portion.treasury.toLowerCase(),
-                BigInt(
-                    Math.max(Math.ceil(Number(provision) * 0.5 * portion.percent), Number(this.context.minimumFee))
+                this.addToTreasuries(payToTreasuries, jamParams.listingMarketDatum, BigInt(Math.ceil(Number(provision) * 0.2)))
+                this.addToTreasuries(payToTreasuries, jamParams.listingAffiliateDatum, BigInt(Math.ceil(Number(provision) * 0.2)))
+
+                for (let portion of sellMarketPortions) {
+                    this.addToTreasuries(
+                        payToTreasuries,
+                        portion.treasury.toLowerCase(),
+                        BigInt(
+                            Math.max(Math.ceil(Number(provision) * 0.5 * portion.percent), Number(this.context.minimumFee))
+                        )
+                    )
+                }
+
+                if (jamParams.royalty) {
+                    this.addToTreasuries(payToTreasuries, jamParams.royalty.treasury.toLowerCase(), BigInt(Math.ceil(Number(jamParams.amount) * jamParams.royalty.percent)))
+                }
+
+                const buyRedeemer = Data.to(new Constr(0, [
+                    sellMarketPortions.map(portion =>
+                        new Constr(0,
+                            [
+                                BigInt(Math.ceil(portion.percent * 10_000)),
+                                Data.from(portion.treasury)
+                            ]
+                        ), // selling marketplace
+                    )]))
+
+                let buildJam = await contract.collectTx(this.lucid, tx, collectUtxo, buyRedeemer)
+                buildJam = buildJam.payToAddress(
+                    jamParams.beneficier,
+                    { lovelace: jamParams.amount - BigInt(provision) + collectUtxo.assets.lovelace }
                 )
-            )
+                return await this.payToTreasuries(buildJam, contract.treasury!, utxo, payToTreasuries, force)
+
+            case ContractType.JPG:
+                console.log("Procesing JPG", collectUtxo)
+                const jpgParams = contract.parseDatum(
+                    this.lucid,
+                    (collectUtxo.datum! || await this.lucid.provider.getDatum(collectUtxo.datumHash!))) as JpgDatum
+
+                let buildJpg = await contract.collectTx(this.lucid, tx, collectUtxo, Data.to(new Constr(0, [0n])))
+
+                let sumAmount = 0n
+                for (const [address, amount] of Object.entries(jpgParams.payouts)) {
+                    sumAmount += amount
+                }
+
+                buildJpg = buildJpg.payToAddressWithData(
+                    'addr1xxzvcf02fs5e282qk3pmjkau2emtcsj5wrukxak3np90n2evjel5h55fgjcxgchp830r7h2l5msrlpt8262r3nvr8eksg6pw3p',
+                    {
+                        inline: Data.to(toHex(C.hash_blake2b256(fromHex(Data.to(
+                            new Constr(0, [new Constr(0, [collectUtxo.txHash]), BigInt(collectUtxo.outputIndex)]),
+                        )))))
+                    }, { lovelace: sumAmount * 50n / 49n / 50n })
+
+                for (const [address, amount] of Object.entries(jpgParams.payouts)) {
+                    buildJpg = buildJpg.payToAddress(address, { lovelace: amount })
+                }
+                buildJpg = buildJpg.addSigner(await this.lucid.wallet.address());
+                return buildJpg
+
+            default:
+                throw new Error("unknown contract")
         }
-
-        if (params.royalty) {
-            this.addToTreasuries(payToTreasuries, params.royalty.treasury.toLowerCase(), BigInt(Math.ceil(Number(params.amount) * params.royalty.percent)))
-        }
-
-        const buyRedeemer = Data.to(new Constr(0, [
-            sellMarketPortions.map(portion =>
-                new Constr(0,
-                    [
-                        BigInt(Math.ceil(portion.percent * 10_000)),
-                        Data.from(portion.treasury)
-                    ]
-                ), // selling marketplace
-            )]))
-
-        let buildTx = await contract.collectTx(this.lucid, tx, collectUtxo, buyRedeemer)
-        buildTx = buildTx.payToAddress(
-            params.beneficier,
-            { lovelace: params.amount - BigInt(provision) + collectUtxo.assets.lovelace }
-        )
-        return await this.payToTreasuries(buildTx, contract.treasury!, utxo, payToTreasuries, force)
     }
 
     public async instantBuyProceed(utxo: OutRef, force: boolean = false, ...sellMarketPortions: Portion[]): Promise<string> {
+        console.log("Inside instant buy")
         let buildTx = this.lucid.newTx()
         buildTx = await this.instantBuyProceedTx(buildTx, utxo, force, ...sellMarketPortions)
         return await this.finishTx(buildTx)

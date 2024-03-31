@@ -19,7 +19,7 @@ under the License.
 
 import { Data, Constr, paymentCredentialOf } from "lucid-cardano"
 import type { Credential, Lucid, OutRef, Tx, UTxO } from "lucid-cardano"
-import type { Portion, WantedAsset, InstantBuyDatumV1, OfferDatumV1 } from "./definitions"
+import type { Portion, WantedAsset, InstantBuyDatumV1, OfferDatumV1, JpgDatum } from "./definitions"
 
 export enum ContractType {
     Unknown,
@@ -94,7 +94,7 @@ export class ContractBase implements Contract {
         throw new Error("There is no script")
     }
 
-    parseDatum(lucid: Lucid, datum: string) {
+    parseDatum(lucid: Lucid, datum: string): any {
         throw new Error("No script provided")
     }
 }
@@ -202,17 +202,17 @@ export function parseWantedAsset(datum: Constr<any>): WantedAsset {
     }
 }
 
-export function parseBeneficier(lucid: Lucid, datum: Constr<any>): string {
-    const beneficier_address = datum.fields[0].fields[0]
-    const beneficier_stake = datum.fields[1].index == 0 ?
+export function parseAddress(lucid: Lucid, datum: Constr<any>): string {
+    const paymentCred = datum.fields[0].fields[0]
+    const stakeCred = datum.fields[1].index == 0 ?
         datum.fields[1].fields[0].fields[0].fields[0]
         :
         undefined
-    const beneficier = lucid.utils.credentialToAddress(
-        lucid.utils.keyHashToCredential(beneficier_address),
-        beneficier_stake ? lucid.utils.keyHashToCredential(beneficier_stake) : undefined
+    const address = lucid.utils.credentialToAddress(
+        lucid.utils.keyHashToCredential(paymentCred),
+        stakeCred ? lucid.utils.keyHashToCredential(stakeCred) : undefined
     )
-    return beneficier
+    return address
 }
 
 export class JobContract extends ContractBase { }
@@ -221,7 +221,7 @@ export class JobContractInstantBuy extends JobContract {
     public parseDatum(lucid: Lucid, datumString: string): InstantBuyDatumV1 {
         const datumParsed: Constr<any> = Data.from(datumString)
 
-        const beneficier = parseBeneficier(lucid, datumParsed.fields[0])
+        const beneficier = parseAddress(lucid, datumParsed.fields[0])
         const listingMarketDatum = Data.to(datumParsed.fields[1])
         const listingAffiliateDatum = datumParsed.fields[2].index == 0 ? Data.to(datumParsed.fields[2].fields[0]) : listingMarketDatum
         const amount = datumParsed.fields[3]
@@ -240,7 +240,7 @@ export class JobContractOffer extends JobContract {
     public parseDatum(lucid: Lucid, datumString: string): OfferDatumV1 {
         const datum: Constr<any> = Data.from(datumString)
 
-        const beneficier = parseBeneficier(lucid, datum.fields[0])
+        const beneficier = parseAddress(lucid, datum.fields[0])
         const listingMarketDatum = Data.to(datum.fields[1]).toLowerCase()
         const listingAffiliateDatum = (datum.fields[2].index == 0 ? Data.to(datum.fields[2].fields[0]) : listingMarketDatum).toLowerCase()
         const amount = datum.fields[3]
@@ -259,9 +259,22 @@ export class JobContractOffer extends JobContract {
     }
 }
 export class JpgContract extends ContractBase {
-    async collectTx(lucid: Lucid, tx: Tx, utxo: UTxO, redeemer: string | undefined): Promise<Tx> {
-        tx = tx.collectFrom([utxo], Data.void())
+    async collectTx(lucid: Lucid, tx: Tx, utxo: UTxO, redeemer: string | undefined = Data.void()): Promise<Tx> {
+        console.log("Redeemer", redeemer)
+        tx = tx.collectFrom([utxo], redeemer)
         tx = await this.attachTx(lucid, tx)
         return tx
+    }
+
+    public parseDatum(lucid: Lucid, datumString: string): JpgDatum {
+        const datum: Constr<any> = Data.from(datumString)
+        const payouts: Record<string, bigint> = {}
+        for (let row of datum.fields[0]) {
+            payouts[parseAddress(lucid, row.fields[0])] = BigInt(row.fields[1])
+        }
+        return {
+            address: datum.fields[1],
+            payouts
+        }
     }
 }
