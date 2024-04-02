@@ -448,6 +448,7 @@ export class JobCardano {
             switch (contract.type) {
                 case ContractType.JPG:
                     tx = await contract.collectTx(this.lucid, tx, toSpend, Data.to(new Constr(0, [])))
+                    break
                 default:
                     tx = await contract.collectTx(this.lucid, tx, toSpend, Data.to(new Constr(1, [])))
             }
