@@ -447,7 +447,7 @@ export class JobCardano {
             const contract = await this.context.getContractByAddress(toSpend.address)
             switch (contract.type) {
                 case ContractType.JPG:
-                    tx = await contract.collectTx(this.lucid, tx, toSpend, Data.to(new Constr(0, [])))
+                    tx = await contract.collectTx(this.lucid, tx, toSpend, Data.to(new Constr(1, [])))
                     break
                 default:
                     tx = await contract.collectTx(this.lucid, tx, toSpend, Data.to(new Constr(1, [])))
