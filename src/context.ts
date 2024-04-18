@@ -41,6 +41,8 @@ export type Contract = {
     collectTx(lucid: Lucid, tx: Tx, utxo: UTxO, redeemer: string | undefined): Promise<Tx>
     attachTx(lucid: Lucid, tx: Tx): Promise<Tx>
     parseDatum(lucid: Lucid, datum: string): any
+    getAddress(lucid: Lucid, stakeId?: number): string
+    getStakeNumber(): number
 }
 
 export class ContractBase implements Contract {
@@ -51,8 +53,9 @@ export class ContractBase implements Contract {
     private ref?: OutRef
     private script?: string
     private utxo?: UTxO
+    private stakes?: string[]
 
-    constructor(type: ContractType, active: boolean, hash: string, ref?: OutRef, script?: string, tresury?: Contract) {
+    constructor(type: ContractType, active: boolean, hash: string, ref?: OutRef, script?: string, tresury?: Contract, stakes?: string[]) {
         this.type = type
         this.active = active
         this.ref = ref
@@ -60,6 +63,7 @@ export class ContractBase implements Contract {
         this.utxo = undefined
         this.script = script
         this.treasury = tresury
+        this.stakes = stakes
     }
 
     async getUtxo(lucid: Lucid): Promise<UTxO | undefined> {
@@ -97,6 +101,31 @@ export class ContractBase implements Contract {
     parseDatum(lucid: Lucid, datum: string): any {
         throw new Error("No script provided")
     }
+
+    getStake(stakeId?: number): string {
+        if (typeof stakeId === "undefined")
+            stakeId = stakeId || Math.round(Math.random() * this.stakes!.length)
+
+        return this.stakes![stakeId % this.stakes!.length]
+    }
+
+    getAddress(lucid: Lucid, stakeId?: number): string {
+        const paymentCredential = {
+            type: "Script",
+            hash: this.hash
+        } as Credential
+
+        const stakeCredential = {
+            type: "Script",
+            hash: this.getStake(stakeId)
+        } as Credential
+
+        return lucid.utils.credentialToAddress(paymentCredential, stakeCredential)
+    }
+
+    getStakeNumber(): number {
+        return this.stakes?.length || 0
+    }
 }
 
 export class Context {
@@ -110,15 +139,13 @@ export class Context {
     readonly minimumFee = 20_001n
 
     readonly contracts: Contract[]
-    readonly stakes: string[]
 
     constructor(
         jobApiUrl: string,
         jobTokenPolicy: string,
         jobTokenName: string,
         numberOfToken: number,
-        contracts: Contract[],
-        stakes: string[]) {
+        contracts: Contract[]) {
         this.jobApiUrl = jobApiUrl
 
         this.jobTokenPolicy = jobTokenPolicy
@@ -126,7 +153,6 @@ export class Context {
         this.numberOfToken = numberOfToken
 
         this.contracts = contracts
-        this.stakes = stakes
     }
 
     public getContractByHash(hash: string): Contract {
@@ -148,32 +174,6 @@ export class Context {
 
     public getContract(type: ContractType): Contract {
         return this.contracts.find(contract => (contract.active && contract.type == type))!
-    }
-
-    public getStakeNumber(): number {
-        return this.stakes.length
-    }
-
-    public getStake(stakeId?: number): string {
-        if (typeof stakeId === "undefined")
-            stakeId = stakeId || Math.round(Math.random() * this.stakes.length)
-
-        return this.stakes[stakeId % this.stakes.length]
-    }
-
-    public getContractAddress(lucid: Lucid, contract: Contract, stakeId?: number): string {
-        const paymentCredential = {
-            type: "Script",
-            hash: contract.hash
-        } as Credential
-
-        const stakeCredential = {
-            type: "Script",
-            hash: this.getStake(stakeId)
-        } as Credential
-
-        return lucid.utils.credentialToAddress(paymentCredential, stakeCredential)
-
     }
 }
 

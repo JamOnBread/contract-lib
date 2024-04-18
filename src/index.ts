@@ -17,7 +17,7 @@ specific language governing permissions and limitations
 under the License.
 */
 
-import { Constr, C, Data, fromText, fromHex, toHex, type Lucid, type OutRef, type Tx, type Unit, type UTxO } from "lucid-cardano"
+import { Constr, C, Data, fromText, fromHex, toHex, type Lucid, type OutRef, type Tx, type Unit, type UTxO, Credential } from "lucid-cardano"
 import type { Portion, WantedAsset, SignParams, ReservationResponse, UtxosResponse, WithdrawResponse, JpgDatum, } from "./definitions"
 import { Lock } from "./definitions"
 import { encodeTreasuryDatumTokens, encodeTreasuryDatumAddress, encodeAddress, encodeRoyalty, encodeWantedAsset } from "./common"
@@ -158,20 +158,20 @@ export class JobCardano {
     }
 
     public getTreasuryAddress(stakeId?: number): string {
-        return this.context.getContractAddress(this.lucid, this.context.getContract(ContractType.JobTreasury), stakeId)
+        return this.context.getContract(ContractType.JobTreasury).getAddress(this.lucid)
     }
 
     public getInstantBuyAddress(stakeId?: number): string {
-        return this.context.getContractAddress(this.lucid, this.context.getContract(ContractType.JobInstantBuy), stakeId)
+        return this.context.getContract(ContractType.JobInstantBuy).getAddress(this.lucid)
     }
 
     public getOfferAddress(stakeId?: number): string {
-        return this.context.getContractAddress(this.lucid, this.context.getContract(ContractType.JobOffer), stakeId)
+        return this.context.getContract(ContractType.JobOffer).getAddress(this.lucid)
     }
 
     public createTreasuryTx(tx: Tx, unique: number, total: number, datum: string, amount: bigint = 2_000_000n): Tx {
 
-        const stakeNumber = this.context.getStakeNumber()
+        const stakeNumber = this.context.getContract(ContractType.JobTreasury).getStakeNumber()
         const start = Math.floor(Math.random() * stakeNumber)
         const uniqueStakes: number[] = []
 
@@ -371,16 +371,17 @@ export class JobCardano {
         treasuries.set(datum, prev + value)
     }
 
-    async payToTreasuries(tx: Tx, contract: Contract, utxo: OutRef, payToTreasuries: Map<string, bigint>, force: boolean): Promise<Tx> {
+    async payToTreasuries(tx: Tx, contract: Contract, stake: Credential, utxo: OutRef, payToTreasuries: Map<string, bigint>, force: boolean): Promise<Tx> {
         // JoB treasury
-        console.log(payToTreasuries)
+        console.log(payToTreasuries, stake)
         const treasuryRequest = await this.getTreasuriesReserve(utxo, Array.from(payToTreasuries.keys()), force)
 
         if (!treasuryRequest.all && !force) {
             throw new Error('Treasuries are not avaible')
         }
         const allTreasuries = await this.lucid.utxosByOutRef(Object.values(treasuryRequest.utxos))
-        console.log(allTreasuries)
+        const treasuryAddress = contract.getAddress(this.lucid)
+
 
         // Pay to treasuries
         for (let [datum, _] of payToTreasuries) {
@@ -393,15 +394,15 @@ export class JobCardano {
                 tx = tx.payToContract(
                     treasury.address,
                     { inline: datum },
-                    { lovelace: BigInt(treasury.assets.lovelace) + BigInt(Math.max(Number(this.context.minimumFee), Number(payToTreasuries.get(datum)!))) }
+                    { lovelace: 1n + BigInt(treasury.assets.lovelace) + BigInt(Math.max(Number(this.context.minimumFee), Number(payToTreasuries.get(datum)!))) }
                 )
             }
             // There is no free treasury
             else {
                 tx = tx.payToContract(
-                    this.context.getContractAddress(this.lucid, contract),
+                    treasuryAddress,
                     { inline: datum },
-                    { lovelace: BigInt(Math.max(Number(payToTreasuries.get(datum)!), Number(this.context.minimumAdaAmount))) }
+                    { lovelace: 1n + BigInt(Math.max(Number(payToTreasuries.get(datum)!), Number(this.context.minimumAdaAmount))) }
                 )
             }
         }
@@ -529,7 +530,7 @@ export class JobCardano {
                     jamParams.beneficier,
                     { lovelace: jamParams.amount - BigInt(provision) + collectUtxo.assets.lovelace }
                 )
-                return await this.payToTreasuries(buildJam, contract.treasury!, utxo, payToTreasuries, force)
+                return await this.payToTreasuries(buildJam, contract.treasury!, this.lucid.utils.stakeCredentialOf(collectUtxo.address), utxo, payToTreasuries, force)
 
             case ContractType.JPG:
                 console.log("Procesing JPG", collectUtxo)
@@ -671,7 +672,7 @@ export class JobCardano {
                 [unit]: 1n
             }
         )
-        return await this.payToTreasuries(buildTx, contract.treasury!, utxo, payToTreasuries, force)
+        return await this.payToTreasuries(buildTx, contract.treasury!, this.lucid.utils.stakeCredentialOf(collectUtxo.address), utxo, payToTreasuries, force)
     }
 
     public async offerProceed(utxo: OutRef, unit: Unit, force: boolean = false, ...sellMarketPortions: Portion[]): Promise<string> {
