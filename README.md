@@ -11,10 +11,12 @@ yarn build
 ```
 
 ## Test
+
 ```
 yarn test
 ```
 
 ## Usage
+
 The library must be initialized with the context of running the JoB smart contract params
 (UTxO with scripts and script hashes). See `examples` for more info.
