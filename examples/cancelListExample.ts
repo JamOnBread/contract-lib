@@ -1,9 +1,26 @@
-//@ts-nocheck
+// @ts-ignore
+import { JobCardano } from "@jamonbread/sdk";
+import { Blockfrost, Lucid } from "lucid-cardano";
 
-// *** Get the UTXO of the NFT listing
-const utxo = await lucid.utxoByUnit(
-  nftListing.policyId + nftListing.assetNameHex
-);
+const cancelList = async (
+  // *** unit is a policyId + assetNameHex string
+  unit: string
+) => {
+  const lucid = await Lucid.new(
+    // *** Replace with actual Blockfrost data (see setupExample.ts)
+    new Blockfrost("blockfrostUrl", "blockfrostProjectId"),
+    "Preprod"
+  );
+  // *** Create a new job instance
+  const job = new JobCardano(lucid);
 
-// *** Provide the UTXO to the job instantBuyCancel function
-const txHash = await job.instantBuyCancel(utxo);
+  // *** Get the UTXO of the NFT listing
+  const utxo = await lucid.utxoByUnit(unit);
+
+  // *** Provide the UTXO to the job instantBuyCancel function
+  const txHash = await job.instantBuyCancel(utxo);
+  return txHash;
+};
+
+// *** Replace with actual data here
+cancelList("unit");
