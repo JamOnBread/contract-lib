@@ -47,11 +47,11 @@ const makeOffer = async (
 
 // *** Replace with actual data here
 makeOffer(
-  "policyId",
-  "assetName",
-  0,
-  undefined,
-  undefined,
-  undefined,
-  undefined
+  "75dcafb17dc8c6e77636f022b932618b5ed2a6cda9a1fe4ddd414737",
+  "446f6d696e615468654272656164",
+  80000000,
+  "affiliateDatum",
+  "marketplaceAffiliateDatum",
+  "royaltyAddress",
+  0.05
 );

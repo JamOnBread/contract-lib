@@ -3,10 +3,12 @@ import { Blockfrost, Lucid } from "lucid-cardano";
 import { JobCardano, Portion } from "@jamonbread/sdk";
 
 const acceptOffer = async (
-  listingTxHash: string,
-  listingUtxoIndex: number,
   // *** unit is a policyId + assetNameHex string
   unit: string,
+  // *** listingTxHash is the hash of the listing you want to accept the offer for
+  listingTxHash: string,
+  // *** outputIndex is the output index of the listing you want to accept the offer for (usually 0)
+  listingUtxoIndex: number,
   // *** affiliate treasury of your own marketplace
   marketplaceTreasury: string,
   // *** force is a boolean that forces the transaction to go through even if there are no available UTXOs in the wallet
@@ -70,11 +72,11 @@ const acceptOffer = async (
 
 // *** Replace with actual data here
 acceptOffer(
+  "75dcafb17dc8c6e77636f022b932618b5ed2a6cda9a1fe4ddd414737446f6d696e615468654272656164",
   "listingTxHash",
   0,
-  "unit",
   "marketplaceTreasury",
   false,
-  undefined,
-  undefined
+  "affiliateDatum",
+  "subAffiliateDatum"
 );

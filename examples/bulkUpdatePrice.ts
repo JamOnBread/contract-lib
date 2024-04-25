@@ -52,11 +52,19 @@ const bulkUpdatePrice = async (
 // *** Replace with actual data here
 bulkUpdatePrice(
   [
-    { policyId: "policyId", assetNameHex: "assetNameHex", price: 0 },
-    { policyId: "policyId", assetNameHex: "assetNameHex", price: 0 },
+    {
+      policyId: "75dcafb17dc8c6e77636f022b932618b5ed2a6cda9a1fe4ddd414737",
+      assetNameHex: "446f6d696e615468654272656164",
+      price: 6000000,
+    },
+    {
+      policyId: "75dcafb17dc8c6e77636f022b932618b5ed2a6cda9a1fe4ddd414737",
+      assetNameHex: "446f6d696e615468654272656164",
+      price: 7000000,
+    },
   ],
-  undefined,
-  undefined,
-  undefined,
-  undefined
+  "affiliateDatum",
+  "marketplaceAffiliateDatum",
+  "royaltyAddress",
+  0.15
 );

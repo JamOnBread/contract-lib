@@ -2,7 +2,7 @@
 import { JobCardano } from "@jamonbread/sdk";
 import { Blockfrost, Lucid } from "lucid-cardano";
 
-const cancelOffer = async (listingTxHash: string, outputIndex: number) => {
+const cancelOffer = async (listingTxHash: string, listingUtxoIndex: number) => {
   const lucid = await Lucid.new(
     // *** Replace with actual Blockfrost data (see setupExample.ts)
     new Blockfrost("blockfrostUrl", "blockfrostProjectId"),
@@ -16,7 +16,7 @@ const cancelOffer = async (listingTxHash: string, outputIndex: number) => {
     // *** listingTxHash is the hash of the listing you want to cancel the offer for
     txHash: listingTxHash,
     // *** outputIndex is the output index of the listing you want to cancel the offer for (usually 0)
-    outputIndex: outputIndex,
+    outputIndex: listingUtxoIndex,
   });
 
   return txHash;

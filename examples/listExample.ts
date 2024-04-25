@@ -44,4 +44,11 @@ const listAsset = async (
 };
 
 // *** Replace with actual data here
-listAsset("unit", 0, undefined, undefined, undefined);
+listAsset(
+  "75dcafb17dc8c6e77636f022b932618b5ed2a6cda9a1fe4ddd414737446f6d696e615468654272656164",
+  100000000,
+  "affiliatedatum",
+  "marketplaceAffiliateDatum",
+  "royaltyAddress",
+  0.1
+);
