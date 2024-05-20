@@ -555,6 +555,7 @@ export class JobCardano {
     }
 
     public async awaitTx(txHash: string): Promise<boolean> {
+        console.debug(`Waiting for transaction: ${txHash}`)
         return await this.provider.awaitTx(txHash)
     }
 }

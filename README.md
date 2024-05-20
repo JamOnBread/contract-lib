@@ -8,7 +8,7 @@ all examples are present in [examples](examples) folder.
 ```
 npm ci
 npm build
-npm run --loader tsx ./examples/ibList.ts
+PRIV_KEY1="ed25519_sk1y8ldyc3aahpk5l8ze7vyxjhsh6c6hug4tj5cxkpazafz4c5jykzqc4fe09" node --loader tsx ./examples/ibList.ts
 ```
 
 ## Test
