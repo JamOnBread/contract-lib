@@ -1,14 +1,13 @@
-import { Blockfrost, Lucid } from "lucid-cardano";
 // @ts-ignore
-import { JobCardano, Portion } from "@jamonbread/sdk";
+import { Portion } from "@jamonbread/sdk";
+import { OutRef } from "lucid-cardano";
+import { job, unit, outRef, marketTreasury, affiliateTreasury } from "./shared";
 
 const acceptOffer = async (
   // *** unit is a policyId + assetNameHex string
   unit: string,
   // *** listingTxHash is the hash of the listing you want to accept the offer for
-  listingTxHash: string,
-  // *** outputIndex is the output index of the listing you want to accept the offer for (usually 0)
-  listingUtxoIndex: number,
+  outRef: OutRef,
   // *** affiliate treasury of your own marketplace
   marketplaceTreasury: string,
   // *** force is a boolean that forces the transaction to go through even if there are no available UTXOs in the wallet
@@ -19,14 +18,6 @@ const acceptOffer = async (
   affilTreasury?: string,
   subAffilTreasury?: string
 ) => {
-  const lucid = await Lucid.new(
-    // *** Replace with actual Blockfrost data (see setupExample.ts)
-    new Blockfrost("blockfrostUrl", "blockfrostProjectId"),
-    "Preprod"
-  );
-  // *** Create a new job instance
-  const job = new JobCardano(lucid);
-
   // *** portions is an array of objects with two keys: percent and treasury
   // *** percent is the percentage of the total price that will go to the treasury
   // *** treasury is the treasury datum of the treasury that will receive the percentage of the total price
@@ -58,7 +49,7 @@ const acceptOffer = async (
 
   // *** offerProceed function has one required parameter (utxo) and two optional parameters (force and portions array)
   const txHash = await job.offerProceed(
-    { txHash: listingTxHash, outputIndex: listingUtxoIndex },
+    outRef,
     unit,
     force,
     // *** portions is an array of objects with two keys: percent and treasury
@@ -71,12 +62,12 @@ const acceptOffer = async (
 };
 
 // *** Replace with actual data here
-acceptOffer(
-  "75dcafb17dc8c6e77636f022b932618b5ed2a6cda9a1fe4ddd414737446f6d696e615468654272656164",
-  "listingTxHash",
-  0,
-  "marketplaceTreasury",
+const txHash = await acceptOffer(
+  unit,
+  outRef,
+  marketTreasury,
   false,
-  "affiliateDatum",
-  "subAffiliateDatum"
-);
+  affiliateTreasury
+)
+await job.awaitTx(txHash)
+console.log(txHash)

@@ -6,8 +6,9 @@ all examples are present in [examples](examples) folder.
 ## Build and dev
 
 ```
-yarn
-yarn build
+npm ci
+npm build
+npm run --loader tsx ./examples/ibList.ts
 ```
 
 ## Test
@@ -18,5 +19,4 @@ yarn test
 
 ## Usage
 
-The library must be initialized with the context of running the JoB smart contract params
-(UTxO with scripts and script hashes). See `examples` for more info.
+All usages are demonstrated in [examples](examples) folder;

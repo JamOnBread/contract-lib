@@ -17,40 +17,7 @@ specific language governing permissions and limitations
 under the License.
 */
 
-import type { OutRef } from "lucid-cardano"
-
-
-export type Portion = {
-    percent: number,
-    treasury: string,
-}
-
-export type WantedAsset = {
-    policyId: string,
-    assetName: string | undefined
-}
-
-export type InstantBuyDatumV1 = {
-    beneficier: string,
-    listingMarketDatum: string,
-    listingAffiliateDatum: string,
-    amount: bigint,
-    royalty: Portion | undefined
-}
-
-export type OfferDatumV1 = {
-    beneficier: string,
-    listingMarketDatum: string,
-    listingAffiliateDatum: string,
-    amount: bigint,
-    wantedAsset: WantedAsset,
-    royalty: Portion | undefined
-}
-
-export type JpgDatum = {
-    address: string,
-    payouts: Record<string, bigint>
-}
+import type { OutRef, Script } from "lucid-cardano"
 
 export type SignParams = {
     address: string,
@@ -80,4 +47,10 @@ export enum Lock {
     Partial,
     Blocked,
     Error
+}
+
+export type ScriptStore = {
+    hash: string,
+    script: Script,
+    outRef?: OutRef,
 }
