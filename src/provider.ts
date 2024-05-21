@@ -1,6 +1,24 @@
-import { C } from "lucid-cardano";
+/*
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+*/
+
+import { C, Lucid, ScriptType, Network, networkToId } from "lucid-cardano";
 import {
-    applyDoubleCborEncoding,
     Address,
     Assets,
     Credential,
@@ -13,13 +31,27 @@ import {
     Provider,
     RewardAddress,
     Script,
+    ScriptHash,
     Transaction,
     TxHash,
     Unit,
     UTxO,
 } from "lucid-cardano";
 
+export type ScriptResponse = {
+    kind: ScriptType,
+    hash: ScriptHash,
+    hex: string,
+    outRef?: OutRef
+}
 
+export type ContractResponse = {
+    script: ScriptResponse,
+    utxo: UTxO,
+    price: number,
+    royalty: number,
+    totalPrice: number
+}
 
 function transformScript(utxo: any): Script | undefined {
     if (utxo.script) {
@@ -32,6 +64,8 @@ function transformScript(utxo: any): Script | undefined {
     return undefined
 }
 
+
+
 function transformUtxo(utxo: any): UTxO {
     const assets: Assets = {};
     Object.keys(utxo.assets).forEach(key => assets[key.toLowerCase()] = BigInt(utxo.assets[key]))
@@ -40,8 +74,8 @@ function transformUtxo(utxo: any): UTxO {
         txHash: utxo.txHash.toLowerCase(),
         outputIndex: utxo.outputIndex,
         address: utxo.address.toLowerCase(),
-        datumHash: utxo.datumHash.toLowerCase(),
-        datum: utxo.datum.toLowerCase(),
+        datumHash: utxo.datumHash?.toLowerCase(),
+        datum: utxo.datum?.toLowerCase(),
         assets,
         scriptRef: transformScript(utxo)
     } as UTxO
@@ -53,17 +87,17 @@ function transformUtxos(utxos: UTxO[]): UTxO[] {
 }
 
 export class JamOnBreadProvider implements Provider {
-    url: string;
+    url: string
 
     constructor(url: string) {
-        this.url = url;
+        this.url = url
     }
 
     async getProtocolParameters(): Promise<ProtocolParameters> {
         const result = await fetch(`${this.url}/protocol_parametres`, {
-        }).then((res) => res.json());
+        }).then((res) => res.json())
 
-        return {
+        const parameters = {
             minFeeA: parseInt(result.minFeeA),
             minFeeB: parseInt(result.minFeeB),
             maxTxSize: parseInt(result.maxTxSize),
@@ -78,20 +112,14 @@ export class JamOnBreadProvider implements Provider {
             collateralPercentage: parseInt(result.collateralPercentage),
             maxCollateralInputs: parseInt(result.maxCollateralInputs),
             costModels: result.costModels,
-        };
+        }
+        return parameters
     }
 
     async getUtxos(addressOrCredential: Address | Credential): Promise<UTxO[]> {
         const queryPredicate = (() => {
             if (typeof addressOrCredential === "string") return addressOrCredential;
-            const credentialBech32 = addressOrCredential.type === "Key"
-                ? C.Ed25519KeyHash.from_hex(addressOrCredential.hash).to_bech32(
-                    "addr_vkh",
-                )
-                : C.ScriptHash.from_hex(addressOrCredential.hash).to_bech32(
-                    "addr_vkh",
-                ); // should be 'script' (CIP-0005)
-            return credentialBech32;
+            return addressOrCredential.hash
         })();
         const result =
             await fetch(
@@ -115,14 +143,7 @@ export class JamOnBreadProvider implements Provider {
     ): Promise<UTxO[]> {
         const queryPredicate = (() => {
             if (typeof addressOrCredential === "string") return addressOrCredential;
-            const credentialBech32 = addressOrCredential.type === "Key"
-                ? C.Ed25519KeyHash.from_hex(addressOrCredential.hash).to_bech32(
-                    "addr_vkh",
-                )
-                : C.ScriptHash.from_hex(addressOrCredential.hash).to_bech32(
-                    "addr_vkh",
-                ); // should be 'script' (CIP-0005)
-            return credentialBech32;
+            return addressOrCredential.hash;
         })();
         const result =
             await fetch(
@@ -175,42 +196,82 @@ export class JamOnBreadProvider implements Provider {
     }
 
     async getDelegation(rewardAddress: RewardAddress): Promise<Delegation> {
+        const url = `${this.url}/delegation/${rewardAddress}`
         const result = await fetch(
-            `${this.url}/delegation`,
+            url,
             {
-                method: 'POST',
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(rewardAddress),
+                method: 'GET',
+                headers: { "Content-Type": "application/json" }
             }
-        ).then((res) => res.json());
+        ).then((res) => res.json())
         return result;
     }
 
-    async getDatum(datumHash: DatumHash): Promise<Datum> {
+    async getDatum(hash: DatumHash): Promise<Datum> {
         const datum = await fetch(
-            `${this.url}/datum`,
+            `${this.url}/datum/${hash}`,
             {
-                method: 'POST',
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(datumHash),
+                method: 'GET',
+                headers: { "Content-Type": "application/json" }
             },
         )
             .then((res) => res.json())
-            .then((res) => res.cbor);
+            .then((res) => res.datum.hex);
         if (!datum || datum.error) {
-            throw new Error(`No datum found for datum hash: ${datumHash}`);
+            throw new Error(`No datum found for datum hash: ${hash}`);
         }
         return datum;
+    }
+
+    async getScript(hash: ScriptHash): Promise<ScriptResponse> {
+        const script = await fetch(
+            `${this.url}/script/${hash}`,
+            {
+                method: 'GET',
+                headers: { "Content-Type": "application/json" }
+            },
+        )
+            .then((res) => res.json())
+            .then((res) => res.script)
+
+        if (!script || script.error) {
+            throw new Error(`No script found for hash: ${hash}`);
+        }
+        return script as ScriptResponse
+    }
+
+    async getContract(outRef: OutRef): Promise<ContractResponse> {
+        const contract = await fetch(
+            `${this.url}/contract`,
+            {
+                method: 'POST',
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ outRef })
+            },
+        )
+            .then((res) => res.json())
+            .then((res) => res.contract);
+
+        if (!contract || contract.error) {
+            throw new Error(`No contract found for OutRef: ${outRef}`);
+        }
+        return {
+            script: contract.script,
+            utxo: transformUtxo(contract.utxo),
+            price: contract.price,
+            royalty: contract.royalty,
+            totalPrice: contract.totalPrice
+        }
     }
 
     awaitTx(txHash: TxHash, checkInterval = 3000): Promise<boolean> {
         return new Promise((res) => {
             const confirmation = setInterval(async () => {
-                const isConfirmed = await fetch(`${this.url}/transaction_exists`, {
-                    method: 'POST',
+                const isConfirmed = await fetch(`${this.url}/transaction_exists/${txHash}`, {
+                    method: 'GET',
                     headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ txHash: txHash }),
-                }).then((res) => res.json());
+                }).then((res) => res.json())
+                    .then((res) => res);
 
                 if (isConfirmed.exists && !isConfirmed.error) {
                     clearInterval(confirmation);
@@ -222,17 +283,22 @@ export class JamOnBreadProvider implements Provider {
     }
 
     async submitTx(tx: Transaction): Promise<TxHash> {
-        const result = await fetch(`${this.url}/transaction_submit`, {
+        const url = `${this.url}/submit`
+        const result = await fetch(url, {
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify(tx),
+            body: JSON.stringify({ cbor: tx }),
         }).then((res) => res.json());
         if (!result || result.error) {
-            if (result?.status_code === 400) throw new Error(result.message);
-            else throw new Error("Could not submit transaction.");
+            if (result?.status_code === 400) {
+                throw new Error(result.message)
+            }
+            else {
+                throw new Error("Could not submit transaction.")
+            }
         }
-        return result;
+        return result.hash;
     }
 }

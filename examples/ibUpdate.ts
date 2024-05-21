@@ -17,40 +17,19 @@ specific language governing permissions and limitations
 under the License.
 */
 
-import type { OutRef, Script } from "lucid-cardano"
+// @ts-ignore
+import { job, unit } from "./shared"
 
-export type SignParams = {
-    address: string,
-    secret: string,
-    signature: string,
-    key: string
-}
+const updatePrice = async (unit: string, priceInLovelace: number) => {
+  // *** instantBuyUpdate function has two required parameters: unit string (policyId + assetName) and new price
+  const txHash = await job.instantBuyUpdate(unit, BigInt(priceInLovelace))
+  return txHash
+};
 
-export type ReservationResponse = {
-    all: boolean,
-    blocked: boolean,
-    expiration: number,
-    utxos: Map<string, OutRef>
-}
-
-export type UtxosResponse = {
-    utxos: OutRef[]
-}
-
-export type WithdrawResponse = {
-    utxos: OutRef[],
-    expiration: number
-}
-
-export enum Lock {
-    Locked,
-    Partial,
-    Blocked,
-    Error
-}
-
-export type ScriptStore = {
-    hash: string,
-    script: Script,
-    outRef?: OutRef,
-}
+// *** Replace with actual data here
+const txHash = await updatePrice(
+  unit,
+  10000000
+)
+await job.awaitTx(txHash)
+console.log(txHash)

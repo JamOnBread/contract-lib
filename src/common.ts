@@ -18,7 +18,7 @@ under the License.
 */
 
 import { Constr, Data, type Lucid } from "lucid-cardano"
-import type { Portion, WantedAsset } from "./definitions"
+import type { Portion, WantedAsset } from "./cardano/job"
 
 export function getRewardAddress(lucid: Lucid, stake: string): string {
     return lucid.utils.credentialToRewardAddress(

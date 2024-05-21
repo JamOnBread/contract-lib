@@ -17,40 +17,11 @@ specific language governing permissions and limitations
 under the License.
 */
 
-import type { OutRef, Script } from "lucid-cardano"
+import { lucid } from "./shared"
 
-export type SignParams = {
-    address: string,
-    secret: string,
-    signature: string,
-    key: string
-}
+const address = "addr1zxgx3far7qygq0k6epa0zcvcvrevmn0ypsnfsue94nsn3tvpw288a4x0xf8pxgcntelxmyclq83s0ykeehchz2wtspks905plm"
+const payment = lucid.utils.paymentCredentialOf(address)
+const stake = lucid.utils.stakeCredentialOf(address)
 
-export type ReservationResponse = {
-    all: boolean,
-    blocked: boolean,
-    expiration: number,
-    utxos: Map<string, OutRef>
-}
-
-export type UtxosResponse = {
-    utxos: OutRef[]
-}
-
-export type WithdrawResponse = {
-    utxos: OutRef[],
-    expiration: number
-}
-
-export enum Lock {
-    Locked,
-    Partial,
-    Blocked,
-    Error
-}
-
-export type ScriptStore = {
-    hash: string,
-    script: Script,
-    outRef?: OutRef,
-}
+console.log(address)
+console.log(payment.hash, stake.hash)

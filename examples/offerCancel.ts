@@ -17,40 +17,10 @@ specific language governing permissions and limitations
 under the License.
 */
 
-import type { OutRef, Script } from "lucid-cardano"
+// @ts-ignore
+import { job, unit, outRef, marketTreasury, affiliateTreasury } from "./shared"
 
-export type SignParams = {
-    address: string,
-    secret: string,
-    signature: string,
-    key: string
-}
 
-export type ReservationResponse = {
-    all: boolean,
-    blocked: boolean,
-    expiration: number,
-    utxos: Map<string, OutRef>
-}
-
-export type UtxosResponse = {
-    utxos: OutRef[]
-}
-
-export type WithdrawResponse = {
-    utxos: OutRef[],
-    expiration: number
-}
-
-export enum Lock {
-    Locked,
-    Partial,
-    Blocked,
-    Error
-}
-
-export type ScriptStore = {
-    hash: string,
-    script: Script,
-    outRef?: OutRef,
-}
+const txHash = await job.offerCancel(outRef)
+await job.awaitTx(txHash)
+console.log(txHash)

@@ -18,7 +18,7 @@ under the License.
 */
 
 import { Lucid } from "lucid-cardano"
-import { Context } from "./context"
+import { Context } from "./cardano/context"
 import { getContextPreprod } from "./data_preprod"
 import { getContextMainnet } from "./data_mainnet"
 
@@ -37,5 +37,5 @@ export function getContext(lucid: Lucid): Context {
             return getContextMainnet()
     }
 
-    throw new Error("Unknow network")
+    throw new Error("Unknown network")
 }

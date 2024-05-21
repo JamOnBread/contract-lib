@@ -1,47 +1,59 @@
-import { Blockfrost, Lucid } from "lucid-cardano";
+/*
+Licensed to the Apache Software Foundation (ASF) under one
+or more contributor license agreements.  See the NOTICE file
+distributed with this work for additional information
+regarding copyright ownership.  The ASF licenses this file
+to you under the Apache License, Version 2.0 (the
+"License"); you may not use this file except in compliance
+with the License.  You may obtain a copy of the License at
+
+  http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing,
+software distributed under the License is distributed on an
+"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+KIND, either express or implied.  See the License for the
+specific language governing permissions and limitations
+under the License.
+*/
+
 // @ts-ignore
-import { JobCardano, Portion } from "@jamonbread/sdk";
+import { Portion } from "@jamonbread/sdk";
+import { job, unit } from "./shared"
 
 const buyNft = async (
   // *** unit is a policyId + assetNameHex string
   unit: string,
-  // *** affiliate treasury of your own marketplace
-  marketplaceTreasury: string,
   // *** force is a boolean that forces the transaction to go through even if there are no available UTXOs in the wallet
   // *** force is set to false by default, if set to true, the price of the TX will be higher based on the number of UTXOs needed to cover the transaction
   force?: boolean,
+  // *** affiliate treasury of your own marketplace
+  marketplaceTreasury?: string,
   // *** there may be multiple treasuries that will receive a percentage of the total price
   // *** in this example, there are two treasuries: affiliate and sub-affiliate
   affilTreasury?: string,
   subAffilTreasury?: string
 ) => {
-  const lucid = await Lucid.new(
-    // *** Replace with actual Blockfrost data (see setupExample.ts)
-    new Blockfrost("blockfrostUrl", "blockfrostProjectId"),
-    "Preprod"
-  );
-  // *** Create a new job instance
-  const job = new JobCardano(lucid);
 
   // *** Get the utxo of the unit you want to buy
-  const utxo = await lucid.utxoByUnit(unit);
+  const utxo = await job.lucid.utxoByUnit(unit)
 
   // *** portions is an array of objects with two keys: percent and treasury
   // *** percent is the percentage of the total price that will go to the treasury
   // *** treasury is the treasury datum of the treasury that will receive the percentage of the total price
   // *** there may be as many objects in the array as needed, but the sum of all percentages must be equal to 1 (100%)
-  let portions = [] as Portion[];
+  let portions = [] as Portion[]
 
   // *** Example if no treasuries (affiliate or sub-affiliate) are provided
   if (!affilTreasury && !subAffilTreasury) {
-    portions = [{ percent: 1, treasury: marketplaceTreasury }];
+    portions = [{ percent: 1, treasury: marketplaceTreasury }]
 
     // *** Example if only affiliate treasury is provided
   } else if (affilTreasury && !subAffilTreasury) {
     portions = [
       { percent: 0.6, treasury: marketplaceTreasury },
       { percent: 0.4, treasury: affilTreasury },
-    ];
+    ]
 
     // *** Example if both affiliate and sub-affiliate treasuries are provided
   } else if (affilTreasury && subAffilTreasury) {
@@ -52,19 +64,18 @@ const buyNft = async (
         percent: 0.1,
         treasury: subAffilTreasury,
       },
-    ];
+    ]
   }
   // *** instantBuyProceed function has one required parameter (utxo) and two optional parameters (force and portions array)
-  const txHash = await job.instantBuyProceed(utxo, force, ...portions);
+  const txHash = await job.instantBuyProceed(utxo, force, ...[])
+  return txHash
+}
 
-  return txHash;
-};
 
 // *** Replace with actual data here
-buyNft(
-  "75dcafb17dc8c6e77636f022b932618b5ed2a6cda9a1fe4ddd414737446f6d696e615468654272656164",
-  "marketplaceAffiliateDatum",
-  false,
-  "affiliateDatum",
-  "subAffiliateDatum"
-);
+const txHash = await buyNft(
+  unit,
+  false
+)
+await job.awaitTx(txHash)
+console.log(txHash)

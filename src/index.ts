@@ -17,18 +17,25 @@ specific language governing permissions and limitations
 under the License.
 */
 
-import { Constr, C, Data, fromText, fromHex, toHex, type Lucid, type OutRef, type Tx, type Unit, type UTxO, Credential } from "lucid-cardano"
-import type { Portion, WantedAsset, SignParams, ReservationResponse, UtxosResponse, WithdrawResponse, JpgDatum, } from "./definitions"
+import { Constr, C, Data, fromText, fromHex, toHex, type Lucid, type OutRef, type Script, type ScriptType, type Tx, type Unit, type UTxO, Credential, TxSigned, Assets } from "lucid-cardano"
+import type { SignParams, ReservationResponse, UtxosResponse, WithdrawResponse, ScriptStore } from "./definitions"
 import { Lock } from "./definitions"
 import { encodeTreasuryDatumTokens, encodeTreasuryDatumAddress, encodeAddress, encodeRoyalty, encodeWantedAsset } from "./common"
 import { getContext } from "./data"
-import { Context, ContractType, type Contract } from "./context"
+import { ContractType, type Contract } from "./cardano/contract"
+import { Context } from "./cardano/context"
+import { Transaction } from "./cardano/transaction"
+import { InstantBuyDatumV1, OfferDatumV1, WantedAsset, Portion } from "./cardano/job"
+import { JpgDatum } from "./cardano/jpg"
+import { JamOnBreadProvider, ScriptResponse } from "./provider";
 
-export type { Portion, WantedAsset, InstantBuyDatumV1, OfferDatumV1, JpgDatum, SignParams, ReservationResponse, UtxosResponse, WithdrawResponse } from "./definitions"
+export type { SignParams, ReservationResponse, UtxosResponse, WithdrawResponse, ScriptStore } from "./definitions"
+export { Context } from "./cardano/context"
 export { Lock } from "./definitions"
 export { encodeTreasuryDatumTokens, encodeTreasuryDatumAddress, encodeAddress, encodeRoyalty, encodeWantedAsset } from "./common"
-export { Context, ContractType, ContractBase, type Contract } from "./context"
+export { ContractType, ContractBase, type Contract } from "./cardano/contract"
 export { JamOnBreadProvider } from "./provider";
+export type { InstantBuyDatumV1, OfferDatumV1, WantedAsset, Portion } from "./cardano/job"
 
 function query(url: string, method: string, body?: any) {
 
@@ -46,6 +53,7 @@ function query(url: string, method: string, body?: any) {
     })
 }
 
+
 export class JobCardano {
     readonly context: Context
     private jobApiUrl: string
@@ -54,7 +62,9 @@ export class JobCardano {
     public signParams?: SignParams
 
     readonly lucid: Lucid
-
+    readonly provider: JamOnBreadProvider
+    readonly scripts: ScriptStore[] = []
+    readonly minimumAdaAmount = 2_000_000n
 
     constructor(
         lucid: Lucid,
@@ -64,8 +74,12 @@ export class JobCardano {
         this.lucid = lucid
         this.context = context ? context : getContext(lucid)
         this.jobApiUrl = jobApiUrl ? jobApiUrl : this.context.jobApiUrl
-
+        this.provider = new JamOnBreadProvider(`${this.jobApiUrl}/lucid`)
         this.treasuryDatum = Data.to(encodeTreasuryDatumTokens(this.context.jobTokenPolicy, BigInt(this.context.numberOfToken)))
+    }
+
+    public newTx(tx?: Tx): Transaction {
+        return new Transaction(this, tx)
     }
 
     public setSignParams(signParams: SignParams) {
@@ -109,7 +123,7 @@ export class JobCardano {
         )
     }
 
-    public async squashNft(): Promise<OutRef> {
+    public async squashNft(): Promise<String> {
         const utxos = await this.lucid.wallet.getUtxos()
         const assets: Record<string, bigint> = {
             lovelace: 0n
@@ -123,7 +137,8 @@ export class JobCardano {
                 }
             }
         }
-        assets.lovelace -= 2_000_000n
+        // Remove lovelace from assets
+        assets.lovelace = 0n
 
         const tx = await this.lucid
             .newTx()
@@ -135,12 +150,9 @@ export class JobCardano {
             .sign()
             .complete()
 
-        const txHash = await signedTx.submit();
+        const txHash = await signedTx.submit()
 
-        return {
-            txHash,
-            outputIndex: 0
-        }
+        return txHash
     }
 
     public async getEncodedAddress(address?: string) {
@@ -158,18 +170,37 @@ export class JobCardano {
     }
 
     public getTreasuryAddress(stakeId?: number): string {
-        return this.context.getContract(ContractType.JobTreasury).getAddress(this.lucid)
+        return this.context.getContract(ContractType.JobTreasury).getAddress(this)
     }
 
     public getInstantBuyAddress(stakeId?: number): string {
-        return this.context.getContract(ContractType.JobInstantBuy).getAddress(this.lucid)
+        return this.context.getContract(ContractType.JobInstantBuy).getAddress(this)
     }
 
     public getOfferAddress(stakeId?: number): string {
-        return this.context.getContract(ContractType.JobOffer).getAddress(this.lucid)
+        return this.context.getContract(ContractType.JobOffer).getAddress(this)
     }
 
-    public createTreasuryTx(tx: Tx, unique: number, total: number, datum: string, amount: bigint = 2_000_000n): Tx {
+    public async getScript(hash: string): Promise<ScriptStore> {
+        // Find or create
+        let script = this.scripts.find((s => s.hash == hash))
+        if (typeof script === 'undefined') {
+            const tmp = await this.provider.getScript(hash)
+            script = {
+                hash,
+                script: {
+                    script: tmp.hex,
+                    type: tmp.kind,
+                },
+                outRef: tmp.outRef
+            }
+            this.scripts.push(script)
+        }
+
+        return script!
+    }
+
+    public async createTreasuryTx(tx: Transaction, unique: number, total: number, datum: string, amount: bigint = 2_000_000n): Promise<Transaction> {
 
         const stakeNumber = this.context.getContract(ContractType.JobTreasury).getStakeNumber()
         const start = Math.floor(Math.random() * stakeNumber)
@@ -181,21 +212,16 @@ export class JobCardano {
         }
 
         for (let i = 0; i < total; i++) {
-            tx = tx.payToContract(
-                this.getTreasuryAddress(uniqueStakes[i % uniqueStakes.length]),
-                { inline: datum },
-                { lovelace: amount }
-            )
+            tx = await tx.payTo(this.getTreasuryAddress(uniqueStakes[i % uniqueStakes.length]), { lovelace: amount }, datum)
         }
 
         return tx
     }
 
     public async createTreasury(unique: number, total: number, datum: string, amount: bigint = 2_000_000n): Promise<string> {
-        let tx = this.lucid.newTx()
-        tx = this.createTreasuryTx(tx, unique, total, datum, amount)
-
-        return await this.finishTx(tx)
+        let tx = this.newTx()
+        tx = await this.createTreasuryTx(tx, unique, total, datum, amount)
+        return await this.finishTx(await tx.lucid())
     }
 
     public async createTreasuryAddress(address: string, unique: number, total: number, amount: bigint = 2000_000n): Promise<string> {
@@ -212,7 +238,7 @@ export class JobCardano {
     }
 
     public async getTreasuriesReserve(utxo: OutRef, affiliates: string[], force: boolean): Promise<ReservationResponse> {
-        const url = `${this.jobApiUrl}treasury/reserve`
+        const url = `${this.jobApiUrl}/treasury/reserve`
         const body = {
             utxo,
             affiliates,
@@ -224,14 +250,14 @@ export class JobCardano {
     }
 
     public async getTreasuryUtxos(plutus: string): Promise<UtxosResponse> {
-        const url = `${this.jobApiUrl}treasury/utxos/${plutus}`
+        const url = `${this.jobApiUrl}/treasury/utxos/${plutus}`
         const response = await query(url, 'GET')
 
         return await response.json() as UtxosResponse
     }
 
     public async getTreasuryWithdraw(plutus: string, signParams?: SignParams): Promise<WithdrawResponse> {
-        const url = `${this.jobApiUrl}treasury/withdraw`
+        const url = `${this.jobApiUrl}/treasury/withdraw`
         const body = {
             plutus,
             params: signParams || this.signParams || await this.sign()
@@ -248,7 +274,7 @@ export class JobCardano {
         const contract = this.context.getContractByAddress(utxo.address)
 
         if (contract.type == ContractType.JobInstantBuy) {
-            const datum = contract.parseDatum(this.lucid, utxo.datum!)
+            const datum = contract.parseDatum<InstantBuyDatumV1>(this, utxo.datum!)
             affiliates.push(datum.listingMarketDatum)
             if (datum.listingAffiliateDatum) {
                 affiliates.push(datum.listingAffiliateDatum)
@@ -261,7 +287,7 @@ export class JobCardano {
 
         // Offer
         if (contract.type == ContractType.JobOffer) {
-            const datum = contract.parseDatum(this.lucid, utxo.datum!)
+            const datum = contract.parseDatum<OfferDatumV1>(this, utxo.datum!)
             affiliates.push(datum.listingMarketDatum)
             if (datum.listingAffiliateDatum) {
                 affiliates.push(datum.listingAffiliateDatum)
@@ -318,23 +344,24 @@ export class JobCardano {
     public async withdrawTreasuryTx(tx: Tx, utxos: OutRef[], datum: string, reduce: boolean = false): Promise<Tx> {
         const treasuries: Map<string, bigint> = new Map()
         const collectFrom = await this.lucid.utxosByOutRef(utxos)
+        let transaction = new Transaction(this, tx)
 
         for (let utxo of collectFrom) {
             if (utxo.datum! == datum) {
                 const contract = this.context.getContractByAddress(utxo.address)
 
-                tx = await contract.collectTx(this.lucid, tx, utxo, Data.to(new Constr(1, [])))
+                transaction = await contract.cancelTx(this, transaction, utxo)
                 treasuries.set(utxo.address, (treasuries.get(utxo.address) || 0n) + utxo.assets.lovelace)
 
                 if (!reduce) {
-                    tx.payToContract(utxo.address, { inline: utxo.datum! }, { lovelace: this.context.minimumAdaAmount })
+                    tx.payToContract(utxo.address, { inline: utxo.datum! }, { lovelace: this.minimumAdaAmount })
                 }
             }
         }
 
         if (reduce) {
             for (let address of treasuries.keys()) {
-                tx.payToContract(address, { inline: datum }, { lovelace: this.context.minimumAdaAmount })
+                tx.payToContract(address, { inline: datum }, { lovelace: this.minimumAdaAmount })
             }
         }
         return tx
@@ -352,122 +379,38 @@ export class JobCardano {
         return await this.withdrawTreasuryRaw(treasuries.utxos, plutus, reduce)
     }
 
-    getTreasury(treasuries: UTxO[], datum: string): UTxO | undefined {
-        const index = treasuries.findIndex((value: UTxO) => {
-            return value.datum == datum
-        })
-
-        if (index > -1) {
-            const element = treasuries[index]
-            // Removed splice
-            // treasuries.splice(index, 1)
-            return element
-        }
-        return undefined
-    }
-
-    addToTreasuries(treasuries: Map<string, bigint>, datum: string, value: bigint) {
-        const prev = treasuries.get(datum) || 0n
-        treasuries.set(datum, prev + value)
-    }
-
-    async payToTreasuries(tx: Tx, contract: Contract, stake: Credential, utxo: OutRef, payToTreasuries: Map<string, bigint>, force: boolean): Promise<Tx> {
-        // JoB treasury
-        console.log(payToTreasuries, stake)
-        const treasuryRequest = await this.getTreasuriesReserve(utxo, Array.from(payToTreasuries.keys()), force)
-
-        if (!treasuryRequest.all && !force) {
-            throw new Error('Treasuries are not avaible')
-        }
-        const allTreasuries = await this.lucid.utxosByOutRef(Object.values(treasuryRequest.utxos))
-        const treasuryAddress = contract.getAddress(this.lucid)
 
 
-        // Pay to treasuries
-        for (let [datum, _] of payToTreasuries) {
-            const treasury = this.getTreasury(allTreasuries, datum)
-            // Treasury exists
-            if (treasury) {
-                const contract = await this.context.getContractByAddress(treasury.address)
-                tx = await contract.collectTx(this.lucid, tx, treasury, Data.void())
-
-                tx = tx.payToContract(
-                    treasury.address,
-                    { inline: datum },
-                    { lovelace: 1n + BigInt(treasury.assets.lovelace) + BigInt(Math.max(Number(this.context.minimumFee), Number(payToTreasuries.get(datum)!))) }
-                )
-            }
-            // There is no free treasury
-            else {
-                tx = tx.payToContract(
-                    treasuryAddress,
-                    { inline: datum },
-                    { lovelace: 1n + BigInt(Math.max(Number(payToTreasuries.get(datum)!), Number(this.context.minimumAdaAmount))) }
-                )
-            }
-        }
-        return tx
-    }
-
-    public async instantBuyListTx(tx: Tx, unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx> {
-        if (typeof listing == "undefined") {
-            listing = this.treasuryDatum
+    public async instantBuyListTx(tx: Transaction, unit: Unit, price: bigint, listingMarket?: string, listingAffiliate?: string, royalty?: Portion): Promise<Transaction> {
+        if (typeof listingMarket == "undefined") {
+            listingMarket = this.treasuryDatum
         }
 
-        const sellerAddr = await this.getEncodedAddress()
-        const datum = new Constr(0, [
-            sellerAddr,
-            Data.from(listing),
-            affiliate ? new Constr(0, [Data.from(affiliate)]) : new Constr(1, []),
-            price,
-            encodeRoyalty(royalty)
-        ]);
-
-        tx = tx.payToContract(
-            this.getInstantBuyAddress(),
-            { inline: Data.to(datum) },
-            {
-                [unit]: BigInt(1),
-                lovelace: this.context.minimumAdaAmount
-            }
-        )
-
-        return tx
+        const contract = this.context.getContract(ContractType.JobInstantBuy)
+        return await contract.listTx(this, tx, unit, price, listingMarket, listingAffiliate, royalty)
     }
 
-    public async instantbuyList(unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<string> {
-        let txList = this.lucid.newTx()
+    public async instantBuyList(unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<string> {
+        let txList = this.newTx()
         txList = await this.instantBuyListTx(txList, unit, price, listing, affiliate, royalty)
 
-        return await this.finishTx(txList)
+        return await this.finishTx(await txList.lucid())
     }
 
-    public async instantBuyCancelTx(tx: Tx, utxo: UTxO | OutRef): Promise<Tx> {
-        const [toSpend] = await this.lucid.utxosByOutRef([utxo])
-        try {
-            const contract = await this.context.getContractByAddress(toSpend.address)
-            switch (contract.type) {
-                case ContractType.JPG:
-                    tx = await contract.collectTx(this.lucid, tx, toSpend, Data.to(new Constr(1, [])))
-                    break
-                default:
-                    tx = await contract.collectTx(this.lucid, tx, toSpend, Data.to(new Constr(1, [])))
-            }
-            tx = tx.addSigner(await this.lucid.wallet.address())
-        } catch (e) {
-            tx = tx.collectFrom([toSpend])
-        }
-
-        return tx
+    public async instantBuyCancelTx(tx: Transaction, outRef: UTxO | OutRef): Promise<Transaction> {
+        const [utxo] = await this.lucid.utxosByOutRef([outRef])
+        const contract = this.context.getContractByAddress(utxo.address)
+        console.log(contract)
+        return contract.cancelTx(this, tx, utxo)
     }
 
     public async instantBuyCancel(utxo: OutRef): Promise<string> {
-        let txCancel = this.lucid.newTx()
+        let txCancel = this.newTx()
         txCancel = await this.instantBuyCancelTx(txCancel, utxo)
-        return await this.finishTx(txCancel)
+        return await this.finishTx(await txCancel.lucid())
     }
 
-    public async instantBuyUpdateTx(tx: Tx, unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx> {
+    public async instantBuyUpdateTx(tx: Transaction, unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Transaction> {
         const toSpend = await this.lucid.utxoByUnit(unit)
         tx = await this.instantBuyCancelTx(tx, {
             txHash: toSpend.txHash,
@@ -478,207 +421,71 @@ export class JobCardano {
     }
 
     public async instantBuyUpdate(unit: Unit, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<string> {
-        let txUpdate = this.lucid.newTx()
+        let txUpdate = this.newTx()
         txUpdate = await this.instantBuyUpdateTx(txUpdate, unit, price, listing, affiliate, royalty)
-        return await this.finishTx(txUpdate)
+        return await this.finishTx(await txUpdate.lucid())
     }
 
-    public async instantBuyProceedTx(tx: Tx, utxo: OutRef, force: boolean = false, ...sellMarketPortions: Portion[]): Promise<Tx> {
-        console.log("Instant buy proceed")
-        const [collectUtxo] = await this.lucid.utxosByOutRef([
-            utxo
-        ])
-        const contract = await this.context.getContractByAddress(collectUtxo.address)
-        console.log(collectUtxo.address)
-
-        switch (contract.type) {
-            case ContractType.JobInstantBuy:
-                const jamParams = contract.parseDatum(this.lucid, collectUtxo.datum!)
-                const provision = 0.025 * Number(jamParams.amount)
-                const payToTreasuries = new Map<string, bigint>()
-                payToTreasuries.set(this.treasuryDatum, BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.context.minimumJobFee))))
-
-                this.addToTreasuries(payToTreasuries, jamParams.listingMarketDatum, BigInt(Math.ceil(Number(provision) * 0.2)))
-                this.addToTreasuries(payToTreasuries, jamParams.listingAffiliateDatum, BigInt(Math.ceil(Number(provision) * 0.2)))
-
-                for (let portion of sellMarketPortions) {
-                    this.addToTreasuries(
-                        payToTreasuries,
-                        portion.treasury.toLowerCase(),
-                        BigInt(
-                            Math.max(Math.ceil(Number(provision) * 0.5 * portion.percent), Number(this.context.minimumFee))
-                        )
-                    )
-                }
-
-                if (jamParams.royalty) {
-                    this.addToTreasuries(payToTreasuries, jamParams.royalty.treasury.toLowerCase(), BigInt(Math.ceil(Number(jamParams.amount) * jamParams.royalty.percent)))
-                }
-
-                const buyRedeemer = Data.to(new Constr(0, [
-                    sellMarketPortions.map(portion =>
-                        new Constr(0,
-                            [
-                                BigInt(Math.ceil(portion.percent * 10_000)),
-                                Data.from(portion.treasury)
-                            ]
-                        ), // selling marketplace
-                    )]))
-
-                let buildJam = await contract.collectTx(this.lucid, tx, collectUtxo, buyRedeemer)
-                buildJam = buildJam.payToAddress(
-                    jamParams.beneficier,
-                    { lovelace: jamParams.amount - BigInt(provision) + collectUtxo.assets.lovelace }
-                )
-                return await this.payToTreasuries(buildJam, contract.treasury!, this.lucid.utils.stakeCredentialOf(collectUtxo.address), utxo, payToTreasuries, force)
-
-            case ContractType.JPG:
-                console.log("Procesing JPG", collectUtxo)
-                const jpgParams = contract.parseDatum(
-                    this.lucid,
-                    (collectUtxo.datum! || await this.lucid.provider.getDatum(collectUtxo.datumHash!))) as JpgDatum
-
-                let buildJpg = await contract.collectTx(this.lucid, tx, collectUtxo, Data.to(new Constr(0, [0n])))
-
-                let sumAmount = 0n
-                for (const [address, amount] of Object.entries(jpgParams.payouts)) {
-                    sumAmount += amount
-                }
-
-                buildJpg = buildJpg.payToAddressWithData(
-                    'addr1xxzvcf02fs5e282qk3pmjkau2emtcsj5wrukxak3np90n2evjel5h55fgjcxgchp830r7h2l5msrlpt8262r3nvr8eksg6pw3p',
-                    {
-                        inline: Data.to(toHex(C.hash_blake2b256(fromHex(Data.to(
-                            new Constr(0, [new Constr(0, [collectUtxo.txHash]), BigInt(collectUtxo.outputIndex)]),
-                        )))))
-                    }, { lovelace: sumAmount * 50n / 49n / 50n })
-
-                for (const [address, amount] of Object.entries(jpgParams.payouts)) {
-                    buildJpg = buildJpg.payToAddress(address, { lovelace: amount })
-                }
-                buildJpg = buildJpg.addSigner(await this.lucid.wallet.address());
-                return buildJpg
-
-            default:
-                throw new Error("unknown contract")
-        }
+    public async instantBuyProceedTx(tx: Transaction, outRef: OutRef, force: boolean = false, ...sellMarketPortions: Portion[]): Promise<Transaction> {
+        const [utxo] = await this.lucid.utxosByOutRef([outRef])
+        const contract = this.context.getContractByAddress(utxo.address)
+        return contract.processTx(this, tx, utxo, force, ...sellMarketPortions)
     }
 
     public async instantBuyProceed(utxo: OutRef, force: boolean = false, ...sellMarketPortions: Portion[]): Promise<string> {
         console.log("Inside instant buy")
-        let buildTx = this.lucid.newTx()
+        let buildTx = this.newTx()
         buildTx = await this.instantBuyProceedTx(buildTx, utxo, force, ...sellMarketPortions)
-        return await this.finishTx(buildTx)
+        return await this.finishTx(await buildTx.lucid())
     }
 
-    public async offerListTx(tx: Tx, asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx> {
-        if (typeof listing == "undefined") {
-            listing = this.treasuryDatum
+    public async offerListTx(tx: Transaction, asset: WantedAsset, price: bigint, listingMarket?: string, listingAffiliate?: string, royalty?: Portion): Promise<Transaction> {
+        if (typeof listingMarket == "undefined") {
+            listingMarket = this.treasuryDatum
         }
-
-        const offererAddr = await this.getEncodedAddress()
-        const datum = new Constr(0, [
-            offererAddr,
-            Data.from(listing),
-            affiliate ? new Constr(0, [Data.from(affiliate)]) : new Constr(1, []),
-            price,
-            encodeWantedAsset(asset),
-            encodeRoyalty(royalty)
-        ]);
-
-        tx = tx.payToContract(
-            this.getOfferAddress(),
-            { inline: Data.to(datum) },
-            {
-                lovelace: this.context.minimumAdaAmount + price
-            }
-        )
-
-        return tx
+        const contract = this.context.getContract(ContractType.JobOffer)
+        return await contract.listTx(this, tx, asset, price, listingMarket, listingAffiliate, royalty)
     }
 
     public async offerList(asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<string> {
-        let txList = this.lucid.newTx()
+        let txList = this.newTx()
         txList = await this.offerListTx(txList, asset, price, listing, affiliate, royalty)
-
-        return this.finishTx(txList)
+        return this.finishTx(await txList.lucid())
     }
 
-    public async offerCancelTx(tx: Tx, utxo: UTxO | OutRef): Promise<Tx> {
+    public async offerCancelTx(tx: Transaction, utxo: UTxO | OutRef): Promise<Transaction> {
         const [toSpend] = await this.lucid.utxosByOutRef([utxo])
         const contract = await this.context.getContractByAddress(toSpend.address)
-        tx = await contract.collectTx(this.lucid, tx, toSpend, Data.to(new Constr(1, [])))
-        return tx.addSigner(await this.lucid.wallet.address())
+        return await contract.cancelTx(this, tx, toSpend)
     }
 
     public async offerCancel(utxo: OutRef): Promise<string> {
-        let txCancel = this.lucid.newTx()
+        let txCancel = this.newTx()
         txCancel = await this.offerCancelTx(txCancel, utxo)
-        return await this.finishTx(txCancel)
+        return await this.finishTx(await txCancel.lucid())
     }
 
-    public async offerUpdateTx(tx: Tx, utxo: UTxO | OutRef, asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Tx> {
+    public async offerUpdateTx(tx: Transaction, utxo: UTxO | OutRef, asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<Transaction> {
         tx = await this.offerCancelTx(tx, utxo)
-        tx = await this.offerListTx(tx, asset, price, listing, affiliate, royalty)
-        return tx
+        return await this.offerListTx(tx, asset, price, listing, affiliate, royalty)
     }
 
     public async offerUpdate(utxo: UTxO | OutRef, asset: WantedAsset, price: bigint, listing?: string, affiliate?: string, royalty?: Portion): Promise<string> {
-        let txUpdate = this.lucid.newTx()
+        let txUpdate = this.newTx()
         txUpdate = await this.offerUpdateTx(txUpdate, utxo, asset, price, listing, affiliate, royalty)
-        return await this.finishTx(txUpdate)
+        return await this.finishTx(await txUpdate.lucid())
     }
 
-    public async offerProceedTx(tx: Tx, utxo: OutRef, unit: Unit, force: boolean = false, ...sellMarketPortions: Portion[]): Promise<Tx> {
-
-        const [collectUtxo] = await this.lucid.utxosByOutRef([
-            utxo
-        ])
-
-        const contract = await this.context.getContractByAddress(collectUtxo.address)
-        const params = contract.parseDatum(this.lucid, collectUtxo.datum!)
-        const provision = 0.025 * Number(params.amount)
-
-        console.debug("Offer", params)
-        const payToTreasuries = new Map<string, bigint>()
-        payToTreasuries.set(this.treasuryDatum, BigInt(Math.max(Math.ceil(provision * 0.1), Number(this.context.minimumJobFee))))
-
-        this.addToTreasuries(payToTreasuries, params.listingMarketDatum.toLocaleLowerCase(), BigInt(Math.ceil(Number(provision) * 0.2)))
-        this.addToTreasuries(payToTreasuries, params.listingAffiliateDatum.toLowerCase(), BigInt(Math.ceil(Number(provision) * 0.2)))
-
-        for (let portion of sellMarketPortions) {
-            this.addToTreasuries(payToTreasuries, portion.treasury.toLowerCase(), BigInt(Math.ceil(Number(provision) * 0.5 * portion.percent)))
-        }
-
-        if (params.royalty) {
-            this.addToTreasuries(payToTreasuries, params.royalty.treasury.toLowerCase(), BigInt(Math.ceil(Number(params.amount) * params.royalty.percent)))
-        }
-
-        const buyRedeemer = Data.to(new Constr(0, [
-            sellMarketPortions.map(portion =>
-                new Constr(0,
-                    [
-                        BigInt(Math.ceil(portion.percent * 10_000)),
-                        Data.from(portion.treasury)
-                    ]
-                ), // selling marketplace
-            )]))
-
-        let buildTx = await contract.collectTx(this.lucid, tx, collectUtxo, buyRedeemer)
-        buildTx = buildTx.payToAddress(
-            params.beneficier,
-            {
-                lovelace: this.context.minimumAdaAmount,
-                [unit]: 1n
-            }
-        )
-        return await this.payToTreasuries(buildTx, contract.treasury!, this.lucid.utils.stakeCredentialOf(collectUtxo.address), utxo, payToTreasuries, force)
+    public async offerProceedTx(tx: Transaction, outRef: OutRef, unit: Unit, force: boolean = false, ...sellMarketPortions: Portion[]): Promise<Transaction> {
+        const [utxo] = await this.lucid.utxosByOutRef([outRef])
+        const contract = await this.context.getContractByAddress(utxo.address)
+        return await contract.processTx(this, tx, utxo, unit, force, ...sellMarketPortions)
     }
 
     public async offerProceed(utxo: OutRef, unit: Unit, force: boolean = false, ...sellMarketPortions: Portion[]): Promise<string> {
-        let buildTx = this.lucid.newTx()
+        let buildTx = this.newTx()
         buildTx = await this.offerProceedTx(buildTx, utxo, unit, force, ...sellMarketPortions)
-        return await this.finishTx(buildTx)
+        return await this.finishTx(await buildTx.lucid())
     }
 
     public registerStakeTx(tx: Tx, stake: string): Tx {
@@ -704,9 +511,11 @@ export class JobCardano {
 
     public async delegate(stake: string, poolId: string): Promise<string> {
         let newTx = this.lucid.newTx()
+        /*
         newTx = this.delegateTx(newTx, stake, poolId)
         newTx = await this.addJobTokens(newTx)
         newTx = await this.context.getContractByHash(stake).attachTx(this.lucid, newTx)
+        */
         return await this.finishTx(newTx)
     }
 
@@ -719,26 +528,34 @@ export class JobCardano {
 
     public async withdraw(stake: string, amount: bigint): Promise<string> {
         let newTx = this.lucid.newTx()
+        /*
         newTx = this.withdrawTx(newTx, stake, amount)
         newTx = await this.addJobTokens(newTx)
         newTx = await this.context.getContractByHash(stake).attachTx(this.lucid, newTx)
+        */
         return await this.finishTx(newTx)
     }
 
-    public async addJobTokens(tx: Tx): Promise<Tx> {
+    public async addJobTokens(tx: Tx, assets?: Assets): Promise<Tx> {
+        if (typeof assets === 'undefined') {
+            assets = { [this.context.jobTokenPolicy + this.context.jobTokenName]: BigInt(this.context.numberOfToken) }
+        }
         return tx.payToAddress(
             await this.lucid.wallet.address(),
-            { [this.context.jobTokenPolicy + this.context.jobTokenName]: BigInt(this.context.numberOfToken) }
+            assets
         )
     }
 
     public async finishTx(tx: Tx): Promise<string> {
-
         const txComplete = await tx.complete()
         const signedTx = await txComplete.sign().complete()
-        const txHash = await signedTx.submit()
-
+        const cbor = await signedTx.toString()
+        const txHash = await this.provider.submitTx(cbor)
         return txHash
     }
 
+    public async awaitTx(txHash: string): Promise<boolean> {
+        console.debug(`Waiting for transaction: ${txHash}`)
+        return await this.provider.awaitTx(txHash)
+    }
 }
