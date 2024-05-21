@@ -216,7 +216,7 @@ export class JamOnBreadProvider implements Provider {
             },
         )
             .then((res) => res.json())
-            .then((res) => res.datum);
+            .then((res) => res.datum.hex);
         if (!datum || datum.error) {
             throw new Error(`No datum found for datum hash: ${hash}`);
         }

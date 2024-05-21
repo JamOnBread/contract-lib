@@ -25,6 +25,7 @@ import { JobCardano } from "../index"
 
 
 export function parseAddress(job: JobCardano, datum: Constr<any>): string {
+    console.log(datum)
     const paymentCred = datum.fields[0].fields[0]
     const stakeCred = datum.fields[1].index == 0 ?
         datum.fields[1].fields[0].fields[0].fields[0]
@@ -93,7 +94,6 @@ export class ContractBase implements Contract {
 
     async cancelTx(job: JobCardano, tx: Transaction, utxo: UTxO, ...args: any[]): Promise<Transaction> {
         // Spend UTxO
-        console.log("Cancel Tx")
         tx = tx.spend(utxo, Data.to(new Constr(1, [])))
         // Sign by address
         tx = tx.sign(await job.lucid.wallet.address())

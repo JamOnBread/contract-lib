@@ -26,9 +26,9 @@ import { JpgContract } from "./cardano/jpg"
 
 export function getContextMainnet(): Context {
     const parametres_1 = {
-        minimumFee: 10000,
-        minimumJobFee: 20000,
-        jobTreasury: "abc",
+        minimumFee: 100000,
+        minimumJobFee: 200000,
+        jobTreasury: "d87a9fd8799f581c5d87ebacd1b26282675a61a1cde3e8c64282677739abb58124138e9c05ffff",
         minUtxoValue: 0,
         addToTreasury: 0,
         addToPrice: 0
@@ -151,6 +151,7 @@ export function getContextMainnet(): Context {
 
             // JPG store
             // V2
+            /*
             new JpgContract(
                 false,
                 'a55f409501bf65805bb0dc76f6f9ae90b61e19ed870bc00256813608',
@@ -162,11 +163,12 @@ export function getContextMainnet(): Context {
                 '9068a7a3f008803edac87af1619860f2cdcde40c26987325ace138ad',
                 ''
             ),
+            */
             // V4
             new JpgContract(
                 true,
                 'c727443d77df6cff95dca383994f4c3024d03ff56b02ecc22b0f3f65',
-                ''
+                'addr1xxzvcf02fs5e282qk3pmjkau2emtcsj5wrukxak3np90n2evjel5h55fgjcxgchp830r7h2l5msrlpt8262r3nvr8eksg6pw3p'
             ),
         ]
     )

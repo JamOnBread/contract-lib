@@ -38,7 +38,8 @@ export class JpgContract extends ContractBase {
 
     async processTx(job: JobCardano, tx: Transaction, utxo: UTxO, ...args: any[]): Promise<Transaction> {
 
-        const jpgParams = this.parseDatum(job, utxo.datum!) as JpgDatum
+        const datum = await job.provider.getDatum(utxo.datumHash!)
+        const jpgParams = this.parseDatum(job, datum) as JpgDatum
         let buildJpg = await tx.spend(utxo, Data.to(new Constr(0, [0n])))
 
         let sumAmount = 0n
@@ -46,12 +47,15 @@ export class JpgContract extends ContractBase {
             sumAmount += amount
         }
 
+        const datumJpg = Data.to(toHex(C.hash_blake2b256(fromHex(Data.to(
+            new Constr(0, [new Constr(0, [utxo.txHash]), BigInt(utxo.outputIndex)]),
+        )))))
+
         buildJpg = buildJpg.payTo(
             this.jpgAddress,
-            { lovelace: sumAmount * 50n / 49n / 50n }),
-            Data.to(toHex(C.hash_blake2b256(fromHex(Data.to(
-                new Constr(0, [new Constr(0, [utxo.txHash]), BigInt(utxo.outputIndex)]),
-            )))))
+            { lovelace: sumAmount * 50n / 49n / 50n },
+            datumJpg
+        )
 
         for (const [address, amount] of Object.entries(jpgParams.payouts)) {
             buildJpg = buildJpg.payTo(address, { lovelace: amount })

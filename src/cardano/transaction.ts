@@ -131,8 +131,10 @@ export class Transaction {
         // Add pay part
         for (let pay of this.outputs) {
             // Todo: this check for contract address is not ideal
+            console.log("ADDRESS", pay)
+
             const paymentCredential = this.job.lucid.utils.paymentCredentialOf(pay.address)
-            if (paymentCredential.type == "Script") {
+            if (paymentCredential.type === "Script" && typeof pay.datum !== 'undefined') {
                 tx = tx.payToContract(pay.address, { inline: pay.datum }, pay.assets)
             }
             else if (typeof pay.datum !== 'undefined') {

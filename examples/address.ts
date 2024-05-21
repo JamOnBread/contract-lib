@@ -19,7 +19,7 @@ under the License.
 
 import { lucid } from "./shared"
 
-const address = "addr_test1qp959nkyjdqyq7jkeqaszkp0tw3rlan70skq65apyk0ly2apajtu83l8regx8s8pa7t84za4gxgf4w5lr56x27e30seswyw3fk"
+const address = "addr1zxgx3far7qygq0k6epa0zcvcvrevmn0ypsnfsue94nsn3tvpw288a4x0xf8pxgcntelxmyclq83s0ykeehchz2wtspks905plm"
 const payment = lucid.utils.paymentCredentialOf(address)
 const stake = lucid.utils.stakeCredentialOf(address)
 
