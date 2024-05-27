@@ -21,7 +21,7 @@ under the License.
 import { Context } from "./cardano/context"
 import { ContractType } from "./cardano/contract"
 import { JobContract, JobContractInstantBuy, JobContractOffer, JobContractTreasury } from "./cardano/job"
-import { JpgContract } from "./cardano/jpg"
+import { JpgContract1, JpgContract2, JpgContractUnknown } from "./cardano/jpg"
 
 
 export function getContextMainnet(): Context {
@@ -151,21 +151,19 @@ export function getContextMainnet(): Context {
 
             // JPG store
             // V2
-            /*
-            new JpgContract(
+            new JpgContractUnknown(
                 false,
                 'a55f409501bf65805bb0dc76f6f9ae90b61e19ed870bc00256813608',
-                ''
             ),
+
             // V3
-            new JpgContract(
+            new JpgContract2(
                 false,
-                '9068a7a3f008803edac87af1619860f2cdcde40c26987325ace138ad',
-                ''
+                '9068a7a3f008803edac87af1619860f2cdcde40c26987325ace138ad'
             ),
-            */
+
             // V4
-            new JpgContract(
+            new JpgContract1(
                 true,
                 'c727443d77df6cff95dca383994f4c3024d03ff56b02ecc22b0f3f65',
                 'addr1xxzvcf02fs5e282qk3pmjkau2emtcsj5wrukxak3np90n2evjel5h55fgjcxgchp830r7h2l5msrlpt8262r3nvr8eksg6pw3p'
