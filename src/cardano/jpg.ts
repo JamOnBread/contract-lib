@@ -54,8 +54,8 @@ export class JpgContract1 extends JpgContractUnknown {
 
         const datum = await job.provider.getDatum(utxo.datumHash!)
         const jpgParams = this.parseDatum(job, datum) as JpgDatum
-        let buildJpg = await tx.spend(utxo, Data.to(new Constr(0, [0n])))
 
+        let buildJpg = await tx.spend(utxo, Data.to(new Constr(0, [0n])))
         let sumAmount = 0n
         for (const [address, amount] of Object.entries(jpgParams.payouts)) {
             sumAmount += amount
@@ -97,16 +97,19 @@ export class JpgContract2 extends ContractBase {
         super(ContractType.JPG, active, hash)
     }
 
+    async cancelTx(job: JobCardano, tx: Transaction, utxo: UTxO, ...args: any[]): Promise<Transaction> {
+        // Spend UTxO
+        tx = tx.spend(utxo, Data.to(new Constr(0, [])))
+        // Sign by address
+        tx = tx.sign(await job.lucid.wallet.address())
+        return tx
+    }
+
     async processTx(job: JobCardano, tx: Transaction, utxo: UTxO, ...args: any[]): Promise<Transaction> {
 
         const datum = await job.provider.getDatum(utxo.datumHash!)
         const jpgParams = this.parseDatum(job, datum) as JpgDatum
-        let buildJpg = await tx.spend(utxo, Data.to(new Constr(0, [0n])))
-
-        let sumAmount = 0n
-        for (const [address, amount] of Object.entries(jpgParams.payouts)) {
-            sumAmount += amount
-        }
+        let buildJpg = await tx.spend(utxo, Data.to(new Constr(1, [])))
 
         for (const [address, amount] of Object.entries(jpgParams.payouts)) {
             buildJpg = buildJpg.payTo(address, { lovelace: amount })
