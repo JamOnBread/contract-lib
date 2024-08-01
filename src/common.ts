@@ -56,7 +56,7 @@ export const encodeTreasuryDatumTokens = (
 };
 
 export function encodeRoyalty(portion?: Portion): Constr<Data> {
-    return portion
+    return portion && portion.percent > 0
         ? new Constr(0, [new Constr(0, [BigInt(portion.percent * 10_000), Data.from(portion.treasury)])])
         : new Constr(1, []);
 }
