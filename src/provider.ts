@@ -112,6 +112,9 @@ export class JamOnBreadProvider implements Provider {
             collateralPercentage: parseInt(result.collateralPercentage),
             maxCollateralInputs: parseInt(result.maxCollateralInputs),
             costModels: result.costModels,
+            minfeeRefscriptCostPerByte: parseInt(
+                result.minFeeRefScriptCostPerByte,
+            )
         }
         return parameters
     }
